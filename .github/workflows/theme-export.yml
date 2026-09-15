@@ -1,0 +1,25 @@
+name: Theme export helper
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch tweakcn registry items
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '---THEME_ONE_BEGIN---'
+          curl -fsSL 'https://tweakcn.com/r/themes/cmli80zt6000004l757xqgizs'
+          echo
+          echo '---THEME_ONE_END---'
+          echo '---THEME_TWO_BEGIN---'
+          curl -fsSL 'https://tweakcn.com/r/themes/cmopxyb0d000204l1g6iuhf8m'
+          echo
+          echo '---THEME_TWO_END---'
