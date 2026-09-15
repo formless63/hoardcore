@@ -6,7 +6,13 @@ Hoardcore is an MIT-licensed, self-hosted inventory research tool. It is intende
 
 ## Status
 
-Early development. The application foundation is being established now; no production-ready modules are available yet.
+Early development. The application foundation is in place; no production-ready source modules are available yet.
+
+### Available now
+
+- Runnable TanStack Start application shell.
+- NLAN and Cyberpunk UI themes with independently persisted light/dark mode.
+- PostgreSQL/Graphile Worker deployment foundation.
 
 ## Planned first module
 

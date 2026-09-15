@@ -13,6 +13,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@fontsource-variable/alan-sans": "^5.3.0",
+    "@fontsource-variable/fira-code": "^5.3.0",
+    "@fontsource-variable/playfair-display": "^5.3.0",
+    "@fontsource/dm-mono": "^5.3.0",
+    "@fontsource/geist-sans": "^5.3.0",
     "@tanstack/react-form": "^1.33.5",
     "@tanstack/react-pacer": "^0.23.0",
     "@tanstack/react-query": "^5.102.8",
@@ -23,6 +28,7 @@
     "better-auth": "^1.7.4",
     "drizzle-orm": "^0.45.2",
     "graphile-worker": "^0.18.0",
+    "next-themes": "^0.4.6",
     "pg": "^8.23.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

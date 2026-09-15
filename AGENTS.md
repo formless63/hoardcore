@@ -32,6 +32,14 @@ TanStack libraries ship version-matched Agent Skills. Before substantial edits:
 - Tailwind CSS plus shadcn/ui conventions are the default UI layer. Prefer composable local components over introducing another component framework.
 - Zod defines validation and interchange contracts at trust boundaries.
 
+### Theme conventions
+
+- `data-theme` on `<html>` selects the named visual preset; the `.dark` class independently selects color mode through `next-themes`.
+- Theme presets live in `src/styles/themes/` and should provide both light and dark token sets.
+- Use semantic theme utilities such as `bg-background`, `bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`, and `ring-ring`. Do not hard-code Zinc/Slate/etc. colors into application UI where a semantic token exists.
+- Add selectable themes through `src/components/themes/theme.config.ts`; do not scatter theme IDs through components.
+- Vendored theme values must not require a third-party theme service at runtime.
+
 ### Approved TanStack defaults when the feature actually needs them
 
 - TanStack Virtual for large rendered lists/tables.
