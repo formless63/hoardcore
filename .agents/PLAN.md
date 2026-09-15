@@ -1,0 +1,61 @@
+# Hoardcore plan
+
+This document records product/architecture direction. Once Beads is initialized, implementation work belongs in Beads rather than being duplicated here as a checkbox backlog.
+
+## Product direction
+
+Hoardcore is a self-hosted inventory research application. It should turn public catalog/sale inventory into durable, searchable observations; help users organize outside research; and retain the evidence behind buying decisions.
+
+The project is FOSS under MIT. It is not designed around a hosted Hoardcore SaaS service.
+
+## Architecture direction
+
+Keep the deployable system small:
+
+- one TanStack Start application process/container;
+- one PostgreSQL database;
+- Graphile Worker embedded in the application process for scheduled/durable jobs;
+- generic OIDC authentication via Better Auth.
+
+Prefer the TanStack ecosystem for application primitives when a suitable native tool exists. Adopt primitives when they solve a real problem, but establish the intended native choice early enough to avoid accidental parallel patterns.
+
+## Phase sequence
+
+### Foundation
+
+Establish the application shell, authentication, database/migrations, module contracts, in-process Graphile Worker lifecycle, configuration model, and basic administrative surfaces.
+
+### Shopify source module
+
+Build the first platform source integration around Shopify storefront/catalog behavior. Keep collection conservative and configurable. Separate fetching, parsing, normalization, and persistence so store-specific quirks do not leak into core models.
+
+The module should support catalog snapshots and change observations before deeper retailer-specific behavior is considered.
+
+### Research interchange
+
+Add provider-neutral research batches that export selected product/source facts with an immutable Hoardcore reference and a versioned research prompt/schema. Accept structured results back through validated preview/import.
+
+Direct AI APIs are intentionally not required for this phase.
+
+### Opportunity workflow
+
+Add review states, collaborative notes, watch/ignore/buy decisions, source evidence, historical pricing/availability views, and deterministic resale/ROI calculations based on normalized research inputs.
+
+### Additional source modules
+
+Make new commerce/catalog integrations possible through the same module contracts without changing core product/research models for each platform.
+
+### Direct AI integration
+
+When useful, add direct research/model execution with TanStack AI. It should use the same research contracts already used by manual export/import so AI providers remain replaceable and historical research stays portable.
+
+## Non-goals until demonstrated otherwise
+
+- hosted multi-tenant SaaS architecture;
+- separate worker services;
+- Redis or message brokers;
+- Elasticsearch/Meilisearch;
+- object storage;
+- proxy rotation or anti-bot evasion;
+- provider-specific AI data models;
+- a second state/form/table framework alongside TanStack primitives.
