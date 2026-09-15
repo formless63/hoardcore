@@ -6,6 +6,9 @@
   "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@12.4.1",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "dev": "vite dev",
     "build": "vite build && tsc --noEmit",
@@ -36,7 +39,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
-    "@types/node": "^24.0.0",
+    "@types/node": "^24.13.4",
     "@types/pg": "^8.15.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
@@ -44,7 +47,7 @@
     "drizzle-kit": "^0.31.10",
     "nitro": "^3.0.260311-beta",
     "tailwindcss": "^4.3.3",
-    "typescript": "^6.0.2",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vite": "^8.3.0"
   },
   "intent": {
