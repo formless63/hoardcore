@@ -8,6 +8,19 @@ Read `.agents/PLAN.md` before substantial architectural work.
 
 Once Beads is initialized, Beads is the canonical task/backlog system. Do not create parallel Markdown TODO lists or turn `.agents/PLAN.md` into a task tracker. PLAN.md records direction, boundaries, and sequencing only.
 
+## Dependency and version policy
+
+Prefer the newest viable stable release throughout the stack.
+
+- Use current stable package releases by default; do not choose old versions merely because an older starter or example uses them.
+- Prefer the current Node.js LTS major for production and CI over the newer non-LTS Current line.
+- Prefer the current stable PostgreSQL major; do not adopt PostgreSQL beta/RC releases for production.
+- Avoid alpha, beta, RC, canary, nightly, and insider packages unless a chosen framework currently requires that release line or there is a documented project reason.
+- Keep tightly related packages on versions known to work together. For TanStack Start/Router integrations, check the current upstream TanStack examples and version-matched Intent skills before forcing a newer incompatible package.
+- TypeScript is compatibility-sensitive. Follow the current TanStack Start-supported compiler path rather than automatically jumping compiler majors.
+- Keep package-manager and GitHub Actions tooling current as well as application dependencies.
+- Run the production build and typecheck after dependency updates before considering them complete.
+
 ## TanStack Intent
 
 TanStack libraries ship version-matched Agent Skills. Before substantial edits:
