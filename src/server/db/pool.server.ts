@@ -15,6 +15,11 @@ export function getPostgresPool(): Pool {
   pool.on('error', (error) => {
     console.error('Unexpected error from an idle PostgreSQL client', error)
   })
+  pool.on('connect', (client) => {
+    client.on('error', (error) => {
+      console.error('Unexpected error from an active PostgreSQL client', error)
+    })
+  })
 
   return pool
 }

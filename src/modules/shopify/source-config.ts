@@ -1,5 +1,10 @@
 import type { NormalizedSourceConfig } from '../types'
 
+export const shopifyCollectionPolicyDefaults = {
+  minimumDelayMs: 1000, maxRequests: 3, maxRetries: 2, backoffBaseMs: 1000,
+  userAgent: 'Hoardcore/0.1 (conservative catalog collector)',
+} as const
+
 export function normalizeShopifyCatalogUrl(value: string): NormalizedSourceConfig {
   const trimmedValue = value.trim()
 
@@ -38,7 +43,7 @@ export function normalizeShopifyCatalogUrl(value: string): NormalizedSourceConfi
   const catalogUrl = scopePath ? `https://${host}${scopePath}` : `https://${host}/`
 
   return {
-    config: { catalogUrl },
+    config: { catalogUrl, ...shopifyCollectionPolicyDefaults },
     sourceKey: `${host}${scopePath}`,
     summary: `${host}${scopePath}`,
   }

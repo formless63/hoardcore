@@ -8,8 +8,8 @@ services:
     environment:
       DATABASE_URL: postgresql://hoardcore:${POSTGRES_PASSWORD:-hoardcore}@db:5432/hoardcore
     ports:
-      # Keep the application private to the host. A local Pangolin site connector
-      # can proxy this listener without exposing port 3000 on the LAN or internet.
+      # Keep the application private to the host. A local reverse proxy or tunnel
+      # can reach this listener without exposing port 3000 on the LAN or internet.
       - "127.0.0.1:${APP_PORT:-3000}:3000"
     depends_on:
       db:

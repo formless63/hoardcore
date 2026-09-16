@@ -14,6 +14,7 @@ import { ThemeControls } from '~/components/themes/theme-controls'
 import { DEFAULT_THEME, THEME_BOOTSTRAP_SCRIPT } from '~/components/themes/theme.config'
 import { ThemeProvider } from '~/components/themes/theme-provider'
 import appCss from '~/styles/app.css?url'
+import { authClient } from '~/lib/auth-client'
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient
@@ -40,6 +41,7 @@ export const Route = createRootRouteWithContext<{
 })
 
 function RootDocument({ children }: { children: ReactNode }) {
+  const session = authClient.useSession()
   return (
     <html lang="en" data-theme={DEFAULT_THEME} suppressHydrationWarning>
       <head>
@@ -83,8 +85,29 @@ function RootDocument({ children }: { children: ReactNode }) {
                   >
                     Sources
                   </Link>
+                  <Link
+                    to="/listings"
+                    className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:bg-accent [&[data-status=active]]:text-accent-foreground"
+                  >
+                    Listings
+                  </Link>
+                  <Link
+                    to="/research/preview"
+                    className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:bg-accent [&[data-status=active]]:text-accent-foreground"
+                  >
+                    Research
+                  </Link>
                 </nav>
-                <ThemeControls />
+                <div className="flex items-center gap-3">
+                  {session.data ? (
+                    <button className="text-sm text-muted-foreground hover:text-foreground" onClick={() => void authClient.signOut()} type="button">
+                      Sign out
+                    </button>
+                  ) : (
+                    <Link className="text-sm text-muted-foreground hover:text-foreground" to="/login">Sign in</Link>
+                  )}
+                  <ThemeControls />
+                </div>
               </div>
             </header>
             {children}

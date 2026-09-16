@@ -1,9 +1,23 @@
 import { z } from 'zod'
 import type { HoardcoreSourceModule } from '../types'
-import { normalizeShopifyCatalogUrl } from './source-config'
+import { normalizeShopifyCatalogUrl, shopifyCollectionPolicyDefaults } from './source-config'
+export {
+  normalizeShopifyCollection,
+  parseShopifyCollection,
+  shopifyCollectionResponseSchema,
+  shopifyProductSchema,
+  shopifyVariantSchema,
+} from './contracts'
+export type { ShopifyCollectionContext, ShopifyCollectionResponse, ShopifyProduct } from './contracts'
+export { fetchShopifyCollectionPage, ShopifyCollectionTransportError } from './transport'
+export type { ShopifyCacheEntry, ShopifyCollectionFetchResult, ShopifyHttpClient, ShopifyHttpResponse, ShopifyTransportOptions } from './transport'
 
-const shopifySourceConfigSchema = z.object({
-  catalogUrl: z.url(),
+export const shopifySourceConfigSchema = z.object({ catalogUrl: z.url() }).extend({
+  minimumDelayMs: z.number().int().nonnegative().default(shopifyCollectionPolicyDefaults.minimumDelayMs),
+  maxRequests: z.number().int().positive().default(shopifyCollectionPolicyDefaults.maxRequests),
+  maxRetries: z.number().int().nonnegative().default(shopifyCollectionPolicyDefaults.maxRetries),
+  backoffBaseMs: z.number().int().nonnegative().default(shopifyCollectionPolicyDefaults.backoffBaseMs),
+  userAgent: z.string().min(1).default(shopifyCollectionPolicyDefaults.userAgent),
 })
 
 export const shopifySourceInputSchema = z.object({
@@ -20,7 +34,7 @@ export const shopifyModule = {
     id: 'shopify',
     name: 'Shopify',
     description: 'Collect and normalize public Shopify catalog data.',
-    status: 'planned',
+    status: 'experimental',
   },
   sourceRegistration: {
     inputSchema: shopifySourceInputSchema,
@@ -30,7 +44,8 @@ export const shopifyModule = {
     },
     read(config) {
       const parsed = shopifySourceConfigSchema.parse(config)
-      return normalizeShopifyCatalogUrl(parsed.catalogUrl)
+      const normalized = normalizeShopifyCatalogUrl(parsed.catalogUrl)
+      return { ...normalized, config: { ...normalized.config, ...parsed } }
     },
   },
 } satisfies HoardcoreSourceModule<typeof shopifySourceInputSchema>

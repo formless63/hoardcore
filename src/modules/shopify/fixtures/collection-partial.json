@@ -1,0 +1,8 @@
+{
+  "products": [{
+    "id": 303,
+    "title": "Incomplete Product",
+    "handle": "incomplete-product",
+    "variants": [{ "id": 3001 }]
+  }]
+}

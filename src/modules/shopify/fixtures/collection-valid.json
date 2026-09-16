@@ -1,0 +1,25 @@
+{
+  "products": [
+    {
+      "id": 101,
+      "title": "Field Notebook",
+      "handle": "field-notebook",
+      "body_html": "<p>Hard-wearing <strong>notebook</strong>.</p>",
+      "vendor": "Example Maker",
+      "product_type": "Stationery",
+      "tags": ["paper", "field"],
+      "available": true,
+      "variants": [
+        { "id": 1001, "title": "Black", "sku": "NB-BLK", "price": "12.50", "available": true }
+      ],
+      "images": [{ "src": "https://assets.invalid/field-notebook.jpg" }]
+    },
+    {
+      "id": "202",
+      "title": "Partial Mug",
+      "handle": "partial-mug",
+      "tags": "ceramic, kitchen",
+      "variants": [{ "id": "2001", "price": 8, "available": false }]
+    }
+  ]
+}

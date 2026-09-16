@@ -8,6 +8,20 @@
       "when": 1789528935418,
       "tag": "0000_initial_catalog_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789536598957,
+      "tag": "0001_giant_mindworm",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789550000000,
+      "tag": "0002_catalog_inventory",
+      "breakpoints": true
     }
   ]
 }

@@ -29,6 +29,11 @@ Establish the application shell, authentication, database/migrations, module con
 
 Build the first platform source integration around Shopify storefront/catalog behavior. Keep collection conservative and configurable. Separate fetching, parsing, normalization, and persistence so store-specific quirks do not leak into core models.
 
+The Shopify module is reusable platform support, not a singleton source. An installation may
+register many independent storefronts, collections, or other supported scopes against the same
+module. Core workflows operate on source registrations and module capabilities rather than
+assuming one retailer, one URL, or one collection.
+
 The module should support catalog snapshots and change observations before deeper retailer-specific behavior is considered.
 
 ### Research interchange

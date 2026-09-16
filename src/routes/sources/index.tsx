@@ -1,22 +1,30 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { buttonStyles } from '~/components/ui/button'
 import { SourceList } from '~/features/sources/source-list'
 import {
   SourceListPending,
   SourceLoadError,
 } from '~/features/sources/source-load-state'
-import { listCatalogSources } from '~/features/sources/sources.functions'
+import { listCatalogSources, listCollectionRuns } from '~/features/sources/sources.functions'
+import { getPublicSession } from '~/features/auth/auth.functions'
 
 export const Route = createFileRoute('/sources/')({
+  beforeLoad: async ({ location }) => {
+    if (!(await getPublicSession())) throw redirect({ to: '/login' })
+  },
   head: () => ({ meta: [{ title: 'Sources · Hoardcore' }] }),
-  loader: () => listCatalogSources(),
+  loader: async () => {
+    const [{ sources }, { runs }] = await Promise.all([listCatalogSources(), listCollectionRuns({ data: {} })])
+    const latestRuns = Object.fromEntries(sources.map((source) => [source.id, runs.find((run) => run.sourceId === source.id)]))
+    return { sources, latestRuns }
+  },
   pendingComponent: SourceListPending,
   errorComponent: SourceLoadError,
   component: SourcesPage,
 })
 
 function SourcesPage() {
-  const { sources } = Route.useLoaderData()
+  const { sources, latestRuns } = Route.useLoaderData()
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10" id="main-content">
@@ -27,7 +35,8 @@ function SourcesPage() {
             Catalog sources
           </h1>
           <p className="mt-2 max-w-2xl text-base leading-7 text-muted-foreground">
-            Register the public catalogs Hoardcore can collect and normalize.
+            Register each storefront, collection, or other catalog scope independently. Multiple
+            sources can share the same platform module and collection policy.
           </p>
         </div>
         <Link to="/sources/new" className={buttonStyles({ className: 'self-start sm:self-auto' })}>
@@ -36,7 +45,7 @@ function SourcesPage() {
       </div>
 
       <section className="mt-8" aria-label="Registered catalog sources">
-        <SourceList sources={sources} />
+        <SourceList sources={sources} latestRuns={latestRuns} />
       </section>
     </main>
   )

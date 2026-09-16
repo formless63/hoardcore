@@ -6,6 +6,8 @@ The initial site is deliberately static and build-tool-free so it can be publish
 
 The front page should remain focused on what Hoardcore is, why someone would self-host it, and links into practical installation/module documentation once those docs exist.
 
+The application deployment guide is available at [deployment.md](deployment.md).
+
 ## Cloudflare Pages
 
 The site is static and can be deployed directly from this repository:

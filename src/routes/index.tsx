@@ -1,21 +1,32 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { buttonStyles } from '~/components/ui/button'
 import { SourceList } from '~/features/sources/source-list'
 import {
   SourceListPending,
   SourceLoadError,
 } from '~/features/sources/source-load-state'
-import { listCatalogSources } from '~/features/sources/sources.functions'
+import { listCatalogSources, listCollectionRuns } from '~/features/sources/sources.functions'
+import { getPublicSession } from '~/features/auth/auth.functions'
 
 export const Route = createFileRoute('/')({
-  loader: () => listCatalogSources(),
+  beforeLoad: async () => { if (!(await getPublicSession())) throw redirect({ to: '/login' }) },
+  loader: async () => {
+    const [{ sources }, { runs }] = await Promise.all([
+      listCatalogSources(),
+      listCollectionRuns({ data: {} }),
+    ])
+    const latestRuns = Object.fromEntries(
+      sources.map((source) => [source.id, runs.find((run) => run.sourceId === source.id)]),
+    )
+    return { sources, latestRuns }
+  },
   pendingComponent: SourceListPending,
   errorComponent: SourceLoadError,
   component: Overview,
 })
 
 function Overview() {
-  const { sources } = Route.useLoaderData()
+  const { sources, latestRuns } = Route.useLoaderData()
   const awaitingCollection = sources.filter((source) => source.status === 'not_collected').length
   const needsAttention = sources.filter((source) => source.status === 'error').length
   const recentSources = sources.slice(0, 3)
@@ -59,7 +70,7 @@ function Overview() {
             </Link>
           ) : null}
         </div>
-        <SourceList sources={recentSources} />
+        <SourceList sources={recentSources} latestRuns={latestRuns} />
       </section>
     </main>
   )

@@ -1,7 +1,11 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { SourceForm } from '~/features/sources/source-form'
+import { getPublicSession } from '~/features/auth/auth.functions'
 
 export const Route = createFileRoute('/sources/new')({
+  beforeLoad: async ({ location }) => {
+    if (!(await getPublicSession())) throw redirect({ to: '/login' })
+  },
   head: () => ({ meta: [{ title: 'Add source · Hoardcore' }] }),
   component: NewSourcePage,
 })

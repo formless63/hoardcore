@@ -78,7 +78,8 @@ export function SourceForm() {
             <div>
               <p className="font-medium text-foreground">Shopify</p>
               <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                Register a public Shopify storefront or collection.
+                Register one public storefront or collection scope. You can add more Shopify
+                sources separately; they all reuse this module.
               </p>
             </div>
             <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">

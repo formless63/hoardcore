@@ -6,20 +6,34 @@ Hoardcore is an MIT-licensed, self-hosted inventory research tool. It is intende
 
 ## Status
 
-Early development. The first database-backed operator workflow is available, but authentication,
-collection jobs, and production-ready source modules are not implemented yet.
+Early development. The authenticated catalog tracker and provider-neutral research interchange are
+usable in development. Live collection and deployment acceptance remain pending verification.
 
 ### Available now
 
 - Runnable TanStack Start application shell.
 - NLAN and Cyberpunk UI themes with independently persisted light/dark mode.
 - PostgreSQL schema and committed Drizzle migrations.
-- Catalog source registration with module-owned Shopify storefront and collection-scope validation.
+- Better Auth with provider-neutral OIDC configuration and server-side authorization.
+- In-process Graphile Worker for durable jobs; the application and worker run in one container.
+- Catalog source registration for many independent source scopes, including module-owned Shopify
+  storefront and collection-scope validation.
+- Fixture-driven, conservative Shopify collection transport and snapshot persistence. Live source
+  acceptance is still pending and must be performed by an operator against an approved source.
+- Current listings tracker with source/product/variant detail, observation history, and retained
+  evidence.
+- Versioned research packet export and pasted-result validation preview. Import persistence is not
+  enabled yet.
 - Liveness and database-readiness endpoints at `/api/health` and `/api/ready`.
 
-## Planned first module
+## Source modules
 
-- **Shopify** — collect and normalize public product/catalog data from Shopify stores for research and comparison workflows.
+- **Shopify** — the first source module, collecting and normalizing public product/catalog data.
+  It is reusable across many registered storefronts and collection scopes; Hoardcore is not tied to
+  one store or source.
+
+Additional source modules use the same generic product, variant, listing, observation, and evidence
+contracts.
 
 Hoardcore is software you run yourself. It is not a hosted SaaS service.
 
@@ -57,5 +71,8 @@ pnpm db:migrate
 docker compose up --build app
 ```
 
-The current source-registration surface is intentionally unauthenticated while Better Auth/OIDC
-is still a foundation milestone. Do not expose this early build to an untrusted network.
+Use a configured OIDC provider for operator access. Review the deployment runbook before exposing
+an early build to an untrusted network.
+
+See [the deployment runbook](docs/deployment.md) for secrets, migrations, health checks, backups,
+and conservative collection operations.

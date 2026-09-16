@@ -4,6 +4,7 @@ import { buttonStyles } from '~/components/ui/button'
 import { EmptyState } from '~/components/ui/empty-state'
 import type { CatalogSourceSummary } from './sources.schemas'
 import { SourceStatusBadge } from './source-status-badge'
+import { SourceRunControl } from './source-run-control'
 
 const createdDateFormatter = new Intl.DateTimeFormat('en', {
   day: 'numeric',
@@ -15,9 +16,11 @@ const createdDateFormatter = new Intl.DateTimeFormat('en', {
 export function SourceList({
   sources,
   emptyDescription = 'Register a catalog source to start building a durable inventory history.',
+  latestRuns = {},
 }: {
   sources: CatalogSourceSummary[]
   emptyDescription?: string
+  latestRuns?: Record<string, Parameters<typeof SourceRunControl>[0]['run']>
 }) {
   if (sources.length === 0) {
     return (
@@ -45,7 +48,9 @@ export function SourceList({
               </div>
               <p className="mt-1 truncate text-sm text-muted-foreground">{source.summary}</p>
             </div>
-            <div className="flex shrink-0 items-center justify-between gap-4 sm:justify-end">
+            <div className="flex shrink-0 flex-col items-end gap-3 sm:justify-end">
+              <SourceRunControl sourceId={source.id} run={latestRuns[source.id]} />
+              <div className="flex items-center gap-4">
               <SourceStatusBadge status={source.status} />
               <time
                 className="text-xs text-muted-foreground"
@@ -54,6 +59,7 @@ export function SourceList({
               >
                 {createdDateFormatter.format(new Date(source.createdAt))}
               </time>
+              </div>
             </div>
           </article>
         </li>
