@@ -36,4 +36,16 @@ describe('parseServerConfig', () => {
       'https://identity.example.test/.well-known/openid-configuration',
     )
   })
+
+  it('treats blank optional OIDC values from the example environment as unset', () => {
+    const config = parseServerConfig({
+      DATABASE_URL: 'postgresql://localhost/hoardcore',
+      OIDC_ISSUER: '',
+      OIDC_CLIENT_ID: '',
+      OIDC_CLIENT_SECRET: '',
+    })
+    expect(config.OIDC_ISSUER).toBeUndefined()
+    expect(config.OIDC_CLIENT_ID).toBeUndefined()
+    expect(config.OIDC_CLIENT_SECRET).toBeUndefined()
+  })
 })
