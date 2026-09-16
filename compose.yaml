@@ -3,9 +3,14 @@ services:
     build: .
     restart: unless-stopped
     env_file:
-      - .env
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://hoardcore:${POSTGRES_PASSWORD:-hoardcore}@db:5432/hoardcore
     ports:
-      - "3000:3000"
+      # Keep the application private to the host. A local Pangolin site connector
+      # can proxy this listener without exposing port 3000 on the LAN or internet.
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
     depends_on:
       db:
         condition: service_healthy
@@ -16,9 +21,11 @@ services:
     environment:
       POSTGRES_DB: hoardcore
       POSTGRES_USER: hoardcore
-      POSTGRES_PASSWORD: hoardcore
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hoardcore}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U hoardcore -d hoardcore"]
       interval: 5s

@@ -1,11 +1,35 @@
 node_modules/
+.pnpm-store/
 .output/
 .vite/
 dist/
 coverage/
+test-results/
+playwright-report/
+*.tsbuildinfo
+.cache/
+.wrangler/
+.dev.vars
+.dev.vars.*
+.direnv/
+.envrc
+.npmrc
 .env
 .env.*
 !.env.example
+*.key
+*.pem
+*.p12
+*.pfx
 *.log
 .DS_Store
+Thumbs.db
 src/routeTree.gen.ts
+
+# Operator-local targets and research. Never commit source-specific private notes.
+.hoardcore-private/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key

@@ -11,6 +11,20 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: hoardcore_test
+          POSTGRES_PASSWORD: hoardcore
+          POSTGRES_USER: hoardcore
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hoardcore -d hoardcore_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -21,6 +35,16 @@ jobs:
           runtime: node@24
           cache: true
           require-lockfile: true
+
+      - name: Validate and apply migrations
+        env:
+          DATABASE_URL: postgresql://hoardcore:hoardcore@127.0.0.1:5432/hoardcore_test
+        run: pnpm db:check && pnpm db:migrate
+
+      - name: Test
+        env:
+          TEST_DATABASE_URL: postgresql://hoardcore:hoardcore@127.0.0.1:5432/hoardcore_test
+        run: pnpm test
 
       - name: Build and typecheck
         run: pnpm build
