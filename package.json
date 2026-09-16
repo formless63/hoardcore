@@ -65,5 +65,9 @@
     "skills": [
       "@tanstack/*"
     ]
+  },
+  "optionalDependencies": {
+    "@img/sharp-libvips-linuxmusl-x64": "1.3.3",
+    "@img/sharp-linuxmusl-x64": "0.35.4"
   }
 }
