@@ -58,7 +58,7 @@ function RootDocument({ children }: { children: ReactNode }) {
               Skip to content
             </a>
             <header className="sticky top-0 z-40 border-b border-border bg-card/90 backdrop-blur">
-              <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-3 sm:flex-nowrap sm:px-6">
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 px-2 py-1 sm:flex-nowrap sm:px-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <Link
                     to="/"
@@ -75,7 +75,7 @@ function RootDocument({ children }: { children: ReactNode }) {
                   <Link
                     to="/"
                     activeOptions={{ exact: true }}
-                    className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:bg-accent [&[data-status=active]]:text-accent-foreground"
+                    className="rounded-md px-2 py-1 text-xs text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:bg-accent [&[data-status=active]]:text-accent-foreground"
                   >
                     Overview
                   </Link>
@@ -97,6 +97,7 @@ function RootDocument({ children }: { children: ReactNode }) {
                   >
                     Research
                   </Link>
+                  <Link to="/settings" className="rounded-md px-2 py-1 text-xs text-muted-foreground transition hover:bg-accent hover:text-accent-foreground [&[data-status=active]]:bg-accent [&[data-status=active]]:text-accent-foreground">Settings</Link>
                 </nav>
                 <div className="flex items-center gap-3">
                   {session.data ? (

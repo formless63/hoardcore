@@ -21,6 +21,7 @@ export interface NormalizedVariant {
   sku?: string
   barcode?: string
   price?: number
+  compareAtPrice?: number
   currency?: string
   available: boolean
   imageUrl?: string
@@ -36,6 +37,7 @@ export interface NormalizedSourceListing {
   current: {
     title: string
     price?: number
+    compareAtPrice?: number
     currency?: string
     available: boolean
   }

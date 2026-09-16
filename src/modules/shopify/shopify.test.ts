@@ -90,6 +90,14 @@ describe('Shopify source registration', () => {
     })
   })
 
+  it('preserves comparison price and availability without inventing stock quantity', () => {
+    const input = { ...validFixture, products: validFixture.products.map((product, index) => index === 0 ? { ...product, variants: product.variants.map((variant, variantIndex) => variantIndex === 0 ? { ...variant, compare_at_price: '18.00' } : variant) } : product) }
+    const [record] = normalizeShopifyCollection(parseShopifyCollection(input), { sourceKey: 'catalog-a.example/collections/desk', baseUrl: 'https://catalog-a.example' })
+    expect(record.variant.compareAtPrice).toBe(18)
+    expect(record.listing.current.compareAtPrice).toBe(18)
+    expect(record.listing.current.available).toBe(true)
+  })
+
   it('normalizes blank and null optional metadata without rejecting a page', () => {
     const parsed = parseShopifyCollection(blankOptionalFixture)
     const records = normalizeShopifyCollection(parsed, {

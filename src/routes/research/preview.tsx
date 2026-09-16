@@ -44,17 +44,10 @@ function ResearchPreviewPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10" id="main-content">
-      <div className="max-w-3xl">
-        <p className="text-sm font-medium text-primary">Research interchange</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">Validate research</h1>
-        <p className="mt-2 text-base leading-7 text-muted-foreground">
-          Paste the Hoardcore packet and an external research result to inspect every record before import.
-          Nothing is persisted by this preview.
-        </p>
-      </div>
+    <main className="w-full px-2 py-3 sm:px-3" id="main-content">
+      <h1 className="text-base font-semibold text-foreground">Validate research</h1>
 
-      <section className="mt-8 grid gap-6 lg:grid-cols-2" aria-label="Research JSON input">
+      <section className="mt-3 grid gap-3 lg:grid-cols-2" aria-label="Research JSON input">
         <label className="block">
           <span className="text-sm font-medium text-foreground">ResearchPacket JSON</span>
           <textarea

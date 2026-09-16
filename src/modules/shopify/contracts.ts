@@ -84,6 +84,7 @@ export function normalizeShopifyCollection(
       const imageUrl = imageFor(product, variant)
       const available = variant.available ?? product.available ?? false
       const price = money(variant.price)
+      const compareAtPrice = money(variant.compare_at_price ?? undefined)
       return {
         product: {
           productKey,
@@ -102,6 +103,7 @@ export function normalizeShopifyCollection(
           sku: variant.sku,
           barcode: variant.barcode,
           price,
+          compareAtPrice,
           // Currency is intentionally absent until supplied by a source payload/config.
           available,
           imageUrl,
@@ -113,7 +115,7 @@ export function normalizeShopifyCollection(
           variantKey,
           url: `${storefrontOrigin}/products/${product.handle}?variant=${variant.id}`,
           imageUrl,
-          current: { title: product.title, price, available },
+          current: { title: product.title, price, compareAtPrice, available },
           observedAt: context.observedAt,
         },
       } satisfies NormalizedCatalogRecord

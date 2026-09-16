@@ -19,11 +19,15 @@ export async function listCurrentCatalogListings(db: Database) {
     moduleId: catalogSources.moduleId,
     productId: catalogProducts.id,
     productTitle: catalogProducts.title,
+    manufacturer: catalogProducts.brand,
+    category: catalogProducts.productType,
     variantId: catalogVariants.id,
     variantTitle: catalogVariants.title,
     sku: catalogVariants.sku,
+    imageUrl: sourceListings.imageUrl,
     title: sourceListingCurrent.title,
     price: sourceListingCurrent.price,
+    compareAtPrice: sourceListingCurrent.compareAtPrice,
     currency: sourceListingCurrent.currency,
     available: sourceListingCurrent.available,
     observedAt: sourceListingCurrent.observedAt,
@@ -82,13 +86,16 @@ export async function persistCatalogSnapshot(
       } }).returning({ id: sourceListings.id })
       await tx.insert(sourceListingObservations).values({
         listingId: listing.id, observedAt, title: record.listing.current.title, price: record.listing.current.price?.toFixed(2),
+        compareAtPrice: record.listing.current.compareAtPrice?.toFixed(2),
         currency: record.listing.current.currency, available: record.listing.current.available, evidenceId,
       }).onConflictDoNothing({ target: [sourceListingObservations.listingId, sourceListingObservations.evidenceId] })
       await tx.insert(sourceListingCurrent).values({
         listingId: listing.id, observedAt, title: record.listing.current.title, price: record.listing.current.price?.toFixed(2),
+        compareAtPrice: record.listing.current.compareAtPrice?.toFixed(2),
         currency: record.listing.current.currency, available: record.listing.current.available, updatedAt: observedAt,
       }).onConflictDoUpdate({ target: sourceListingCurrent.listingId, set: {
         observedAt, title: record.listing.current.title, price: record.listing.current.price?.toFixed(2),
+        compareAtPrice: record.listing.current.compareAtPrice?.toFixed(2),
         currency: record.listing.current.currency, available: record.listing.current.available, updatedAt: observedAt,
       } })
       persisted.push({ productId: product.id, variantId: variant.id, listingId: listing.id })

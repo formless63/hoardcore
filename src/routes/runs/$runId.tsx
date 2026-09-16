@@ -26,11 +26,10 @@ function CollectionRunPage() {
   }, [active, router])
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6" id="main-content">
+    <main className="w-full px-2 py-3 sm:px-3" id="main-content">
       <Link className={buttonStyles({ variant: 'ghost' })} to="/sources">← Sources</Link>
-      <p className="mt-6 text-sm font-medium text-primary">Collection progress</p>
-      <h1 className="mt-1 text-3xl font-semibold text-foreground">{sourceName}</h1>
-      <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-5">
+      <h1 className="mt-2 text-base font-semibold text-foreground">{sourceName}</h1>
+      <div className="mt-2 flex flex-wrap items-center gap-3 rounded border border-border bg-card p-3">
         <Badge variant={run.status === 'failed' ? 'danger' : run.status === 'succeeded' ? 'success' : 'info'}>{run.status.replace('_', ' ')}</Badge>
         <span className="text-sm text-muted-foreground">{run.requestCount} of {run.requestLimit} requests</span>
         <span className="text-sm text-muted-foreground">{run.pageCount} pages · {run.productCount} products</span>
@@ -39,11 +38,11 @@ function CollectionRunPage() {
       {run.status === 'partial' ? <p className="mt-3 rounded-lg border border-border bg-muted p-4 text-sm text-foreground">{run.error ?? 'This run reached its request ceiling.'} The products shown were saved, but more pages may exist. Absence from this partial snapshot does not mean an item disappeared.</p> : null}
       {run.status === 'failed' && run.error ? <p className="mt-3 rounded-lg border border-destructive p-4 text-sm text-destructive" role="alert">{run.error}</p> : null}
       <div className="mt-5"><Link className={buttonStyles({ variant: 'secondary' })} to="/listings">View listings</Link></div>
-      <section className="mt-8" aria-label="Run log">
-        <h2 className="text-xl font-semibold text-foreground">Run log</h2>
-        <ol className="mt-4 space-y-3" aria-live="polite">
+      <section className="mt-4" aria-label="Run log">
+        <h2 className="text-sm font-semibold text-foreground">Run log</h2>
+        <ol className="mt-2 space-y-1" aria-live="polite">
           {events.map((event) => (
-            <li className="rounded-lg border border-border bg-card px-4 py-3" key={event.id}>
+            <li className="border-b border-border bg-card px-2 py-1" key={event.id}>
               <time className="block text-xs text-muted-foreground" dateTime={event.createdAt.toISOString()}>{event.createdAt.toLocaleString()}</time>
               <p className="mt-1 text-sm text-foreground">{event.message}</p>
             </li>

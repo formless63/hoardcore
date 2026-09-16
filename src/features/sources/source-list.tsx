@@ -17,10 +17,12 @@ export function SourceList({
   sources,
   emptyDescription = 'Register a catalog source to start building a durable inventory history.',
   latestRuns = {},
+  defaultRequestLimit = 3,
 }: {
   sources: CatalogSourceSummary[]
   emptyDescription?: string
   latestRuns?: Record<string, Parameters<typeof SourceRunControl>[0]['run']>
+  defaultRequestLimit?: number
 }) {
   if (sources.length === 0) {
     return (
@@ -49,7 +51,7 @@ export function SourceList({
               <p className="mt-1 truncate text-sm text-muted-foreground">{source.summary}</p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-3 sm:justify-end">
-              <SourceRunControl sourceId={source.id} run={latestRuns[source.id]} />
+              <SourceRunControl sourceId={source.id} run={latestRuns[source.id]} defaultRequestLimit={defaultRequestLimit} />
               <div className="flex items-center gap-4">
               <SourceStatusBadge status={source.status} />
               <time

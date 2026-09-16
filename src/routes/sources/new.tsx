@@ -12,7 +12,7 @@ export const Route = createFileRoute('/sources/new')({
 
 function NewSourcePage() {
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10" id="main-content">
+    <main className="w-full px-2 py-3 sm:px-3" id="main-content">
       <div className="max-w-2xl">
         <Link
           to="/sources"
@@ -21,12 +21,9 @@ function NewSourcePage() {
           <BackIcon />
           Catalog sources
         </Link>
-        <h1 className="mt-5 text-3xl font-semibold tracking-tight text-foreground">Add source</h1>
-        <p className="mt-2 text-base leading-7 text-muted-foreground">
-          Register a Shopify storefront or one collection. This step does not contact the source.
-        </p>
+        <h1 className="mt-3 text-base font-semibold text-foreground">Add source</h1>
 
-        <div className="mt-8">
+        <div className="mt-3">
           <SourceForm />
         </div>
       </div>

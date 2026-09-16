@@ -23,13 +23,13 @@ const labels: Record<CollectionRun['status'], string> = {
   queued: 'Queued', running: 'Running', succeeded: 'Succeeded', partial: 'Partial', not_modified: 'Not modified', failed: 'Failed',
 }
 
-export function SourceRunControl({ sourceId, run }: { sourceId: string; run?: CollectionRun }) {
+export function SourceRunControl({ sourceId, run, defaultRequestLimit = 3 }: { sourceId: string; run?: CollectionRun; defaultRequestLimit?: number }) {
   const runCollection = useServerFn(enqueueCatalogCollection)
   const router = useRouter()
   const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [requestLimit, setRequestLimit] = useState(3)
+  const [requestLimit, setRequestLimit] = useState(defaultRequestLimit)
 
   useEffect(() => {
     if (run?.status !== 'queued' && run?.status !== 'running') return
