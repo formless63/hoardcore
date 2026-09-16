@@ -11,12 +11,26 @@ Copy `.env.example` to `.env` and set:
 - `BETTER_AUTH_SECRET` to a long random value
 - `BETTER_AUTH_URL` to the externally reachable HTTPS application URL
 - `OIDC_ISSUER`, `OIDC_CLIENT_ID`, and `OIDC_CLIENT_SECRET` together
+- optionally `OIDC_PROVIDER_NAME` and a same-origin `OIDC_PROVIDER_ICON_URL` for the login button
+- optionally `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` together
+  for magic-link fallback sign-in; `SMTP_SECURE=true` is available for implicit TLS
 - `MEDIA_CAPTURE_ENABLED=true` only on an approved collection host when server-side photo
   capture is intended; it is disabled by default
 
 Register the application's exact `/api/auth/callback/oidc` URL in the identity provider. The
 client must permit the `openid`, `email`, and `profile` scopes so Hoardcore can create and identify
 an operator account.
+
+OIDC is the only path that creates accounts. Once a user has signed in with OIDC, the same
+account can request a magic link at its OIDC email address if SMTP is configured. Unknown
+addresses receive the same public response but no email. Links are single-use and expire after
+10 minutes. Magic-link sessions expire after 24 hours; OIDC sessions expire after 30 days.
+Both are absolute limits, not sliding refreshes. SMTP uses TLS, and configuration errors should
+be checked in app logs without ever logging links or credentials. A magic link is not a substitute
+for the identity provider's access policy: anyone with access to the user's mailbox can sign in
+as that user during the link window.
+For a branded OIDC button, set `OIDC_PROVIDER_NAME` and optionally place an icon in the app's
+`public/` directory before building, then set `OIDC_PROVIDER_ICON_URL` to its same-origin path.
 
 Keep `.env`, OIDC credentials, database passwords, and backups out of git and container images.
 Use your deployment system's secret store where available.

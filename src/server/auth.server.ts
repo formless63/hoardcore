@@ -1,11 +1,13 @@
 import { drizzleAdapter } from '@better-auth/drizzle-adapter'
 import { betterAuth, type BetterAuthOptions } from 'better-auth'
-import { genericOAuth } from 'better-auth/plugins'
+import { genericOAuth, magicLink } from 'better-auth/plugins'
 import { tanstackStartCookies } from 'better-auth/tanstack-start'
 import { getRequestHeaders } from '@tanstack/react-start/server'
 import { getServerConfig, normalizeOidcDiscoveryUrl } from './config.server'
 import { getDatabase } from './db/index.server'
 import { authSchema } from './db/schema/auth'
+import { magicLinkSessionPolicy, OIDC_SESSION_SECONDS, oidcLinkedUserIdForEmail } from './auth-policy.server'
+import { isSmtpConfigured, sendMagicLinkEmail } from './mail.server'
 import { z } from 'zod'
 
 const authRuntimeConfigSchema = z.object({
@@ -23,6 +25,10 @@ export function getAuth() {
     secret: runtime.secret,
     baseURL: config.BETTER_AUTH_URL,
     advanced: { useSecureCookies: config.BETTER_AUTH_URL?.startsWith('https://') ?? false },
+    // A finite absolute lifetime avoids immortal sessions. The magic-link hook
+    // below shortens only that method's sessions to 24 hours.
+    session: { expiresIn: OIDC_SESSION_SECONDS, disableSessionRefresh: true },
+    databaseHooks: { session: { create: { before: (session, context) => magicLinkSessionPolicy(getDatabase(), session, context?.path) } } },
     plugins: [
       ...(config.OIDC_ISSUER
         ? [genericOAuth({
@@ -34,6 +40,25 @@ export function getAuth() {
               requireIdTokenVerification: true,
               scopes: ['openid', 'email', 'profile'],
             }],
+          })]
+        : []),
+      ...(isSmtpConfigured(config)
+        ? [magicLink({
+            disableSignUp: true,
+            expiresIn: 10 * 60,
+            storeToken: 'hashed',
+            sendMagicLink: async ({ email, url }) => {
+              // An unknown email gets the same public response but no mail.
+              // It can never become an account through this endpoint.
+              if (!(await oidcLinkedUserIdForEmail(getDatabase(), email))) return
+              try {
+                await sendMagicLinkEmail(config, email, url)
+              } catch (error) {
+                // Do not expose account existence or link contents via errors.
+                const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : 'unknown'
+                console.error(`[auth] magic-link SMTP delivery failed (${code})`)
+              }
+            },
           })]
         : []),
       tanstackStartCookies(),

@@ -14,7 +14,8 @@ watchlists, and opt-in alerts are available. Operator acceptance of each deploym
 - Runnable TanStack Start application shell.
 - NLAN and Cyberpunk UI themes with independently persisted light/dark mode.
 - PostgreSQL schema and committed Drizzle migrations.
-- Better Auth with provider-neutral OIDC configuration and server-side authorization.
+- Better Auth with provider-neutral OIDC account creation, optional SMTP magic-link fallback for
+  existing OIDC-linked accounts, and server-side authorization.
 - In-process Graphile Worker for durable jobs; the application and worker run in one container.
 - Catalog source registration for many independent source scopes, including module-owned Shopify
   storefront and collection-scope validation.

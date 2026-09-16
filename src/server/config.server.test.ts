@@ -55,4 +55,27 @@ describe('parseServerConfig', () => {
     expect(config.OIDC_CLIENT_ID).toBeUndefined()
     expect(config.OIDC_CLIENT_SECRET).toBeUndefined()
   })
+
+  it('requires complete SMTP settings and OIDC before enabling email fallback', () => {
+    const base = {
+      DATABASE_URL: 'postgresql://localhost/hoardcore',
+      OIDC_ISSUER: 'https://identity.example.test',
+      OIDC_CLIENT_ID: 'client',
+      OIDC_CLIENT_SECRET: 'secret',
+    }
+    expect(() => parseServerConfig({ ...base, SMTP_HOST: 'smtp.example.test' })).toThrow('SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, and SMTP_FROM must be configured together')
+    expect(() => parseServerConfig({
+      DATABASE_URL: base.DATABASE_URL,
+      SMTP_HOST: 'smtp.example.test', SMTP_PORT: '587', SMTP_USER: 'operator', SMTP_PASSWORD: 'secret', SMTP_FROM: 'login@example.test',
+    })).toThrow('Magic-link SMTP requires OIDC')
+    const config = parseServerConfig({ ...base, SMTP_HOST: 'smtp.example.test', SMTP_PORT: '587', SMTP_USER: 'operator', SMTP_PASSWORD: 'secret', SMTP_FROM: 'login@example.test' })
+    expect(config.SMTP_PORT).toBe(587)
+  })
+
+  it('allows only same-origin provider icon paths', () => {
+    const base = { DATABASE_URL: 'postgresql://localhost/hoardcore' }
+    expect(parseServerConfig({ ...base, OIDC_PROVIDER_ICON_URL: '/identity-icon.svg' }).OIDC_PROVIDER_ICON_URL).toBe('/identity-icon.svg')
+    expect(() => parseServerConfig({ ...base, OIDC_PROVIDER_ICON_URL: 'https://example.test/icon.svg' })).toThrow('same-origin')
+    expect(() => parseServerConfig({ ...base, OIDC_PROVIDER_ICON_URL: '//example.test/icon.svg' })).toThrow('same-origin')
+  })
 })

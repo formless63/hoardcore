@@ -7,6 +7,7 @@ import {
   Outlet,
   Scripts,
   createRootRouteWithContext,
+  useRouterState,
 } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { ActiveThemeProvider } from '~/components/themes/active-theme'
@@ -42,6 +43,7 @@ export const Route = createRootRouteWithContext<{
 
 function RootDocument({ children }: { children: ReactNode }) {
   const session = authClient.useSession()
+  const isLoginPage = useRouterState({ select: (state) => state.location.pathname === '/login' })
   return (
     <html lang="en" data-theme={DEFAULT_THEME} suppressHydrationWarning>
       <head>
@@ -57,7 +59,7 @@ function RootDocument({ children }: { children: ReactNode }) {
             >
               Skip to content
             </a>
-            <header className="sticky top-0 z-40 border-b border-border bg-card/90 backdrop-blur">
+            {!isLoginPage ? <header className="sticky top-0 z-40 border-b border-border bg-card/90 backdrop-blur">
               <div className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 px-2 py-1 sm:flex-nowrap sm:px-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <Link
@@ -116,7 +118,7 @@ function RootDocument({ children }: { children: ReactNode }) {
                   <ThemeControls />
                 </div>
               </div>
-            </header>
+            </header> : null}
             {children}
           </ActiveThemeProvider>
         </ThemeProvider>

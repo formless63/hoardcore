@@ -39,6 +39,7 @@
     "drizzle-orm": "^0.45.2",
     "graphile-worker": "^0.18.0",
     "next-themes": "^0.4.6",
+    "nodemailer": "^10.0.10",
     "pg": "^8.23.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
