@@ -99,6 +99,19 @@ describe('Shopify collection transport', () => {
     expect(sleeps).toEqual([25])
   })
 
+  it('reports bounded progress without exposing request URLs or payloads', async () => {
+    const events: unknown[] = []
+    await fetchShopifyCollectionPage('https://store.invalid/collections/sale', 1, undefined, {
+      http: async () => response(200, { products: [] }),
+      sleep: async () => {},
+      onEvent: (event) => { events.push(event) },
+    })
+    expect(events).toEqual([
+      { type: 'request_started', page: 1, requestCount: 1 },
+      { type: 'response_received', page: 1, requestCount: 1, status: 200 },
+    ])
+  })
+
   it('fails closed when the access-policy resolver errors and proceeds when allowed', async () => {
     const http = vi.fn().mockResolvedValue(response(200, { products: [] }))
     await expect(fetchShopifyCollectionPage('https://store.invalid', 1, undefined, {

@@ -64,12 +64,12 @@ describe('Shopify collection snapshot orchestration', () => {
     expect(result).toEqual({ status: 'not_modified', cache, requestCount: 1 })
   })
 
-  it('fails before returning a partial snapshot when the shared ceiling is reached', async () => {
+  it('returns a marked partial snapshot when the shared ceiling is reached', async () => {
     const fullPage = { products: Array.from({ length: 250 }, (_, index) => product(index + 1)) }
     const http = vi.fn().mockResolvedValue(response(fullPage))
     const run = createShopifyCollectionRun(1)
 
-    await expect(collectShopifySnapshot({
+    const result = await collectShopifySnapshot({
       catalogUrl: 'https://store.invalid',
       sourceKey: 'store.invalid',
       policy: { ...policy, maxRequests: 1 },
@@ -77,7 +77,10 @@ describe('Shopify collection snapshot orchestration', () => {
       accessPolicy: async () => true,
       run,
       sleep: async () => {},
-    })).rejects.toMatchObject({ kind: 'request_ceiling' })
+    })
+    expect(result).toMatchObject({ status: 'partial', requestCount: 1, pageCount: 1, productCount: 250 })
+    if (result.status === 'not_modified') throw new Error('Expected a partial snapshot')
+    expect(result.records).toHaveLength(250)
     expect(http).toHaveBeenCalledTimes(1)
   })
 })

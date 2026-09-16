@@ -17,6 +17,8 @@ export const createCatalogSourceInputSchema = z.object({
   config: z.record(z.string(), z.unknown()),
 })
 
+export const manualCollectionRequestLimitSchema = z.number().int().min(2).max(20)
+
 export const catalogSourceSummarySchema = z.object({
   id: z.string(),
   displayName: z.string(),

@@ -28,7 +28,12 @@ export interface ShopifyTransportOptions {
   signal?: AbortSignal
   accessPolicy?: (url: string) => Promise<boolean>
   run?: ShopifyCollectionRun
+  onEvent?: (event: ShopifyTransportEvent) => Promise<void> | void
 }
+
+export type ShopifyTransportEvent =
+  | { type: 'request_started'; page: number; requestCount: number }
+  | { type: 'response_received'; page: number; requestCount: number; status: number }
 
 export interface ShopifyCollectionRun {
   requests: number
@@ -133,7 +138,9 @@ export async function fetchShopifyCollectionPage(
     if (options.signal?.aborted) throw new Error('Collection request aborted')
     requests += 1
     run.requests += 1
+    await options.onEvent?.({ type: 'request_started', page, requestCount: run.requests })
     const response = await options.http(endpoint, { headers, signal: options.signal })
+    await options.onEvent?.({ type: 'response_received', page, requestCount: run.requests, status: response.status })
 
     if (response.status === 304) {
       return { status: 'not_modified', endpoint, cache: { ...cache }, requests }

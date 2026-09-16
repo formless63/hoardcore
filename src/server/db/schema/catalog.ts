@@ -1,4 +1,4 @@
-import { boolean, index, jsonb, numeric, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { boolean, index, integer, jsonb, numeric, pgEnum, pgTable, serial, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 import { catalogSources } from './catalog-sources'
 
@@ -14,12 +14,15 @@ export const catalogProducts = pgTable('catalog_products', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
-export const collectionRunStatus = pgEnum('collection_run_status', ['queued', 'running', 'succeeded', 'not_modified', 'failed'])
+export const collectionRunStatus = pgEnum('collection_run_status', ['queued', 'running', 'succeeded', 'partial', 'not_modified', 'failed'])
 export const collectionRuns = pgTable('collection_runs', {
   id: uuid('id').defaultRandom().primaryKey(),
   sourceId: uuid('source_id').notNull().references(() => catalogSources.id, { onDelete: 'cascade' }),
   status: collectionRunStatus('status').notNull().default('queued'),
+  requestLimit: integer('request_limit').notNull().default(3),
   requestCount: numeric('request_count', { precision: 10, scale: 0 }).notNull().default('0'),
+  pageCount: integer('page_count').notNull().default(0),
+  productCount: integer('product_count').notNull().default(0),
   error: text('error'),
   etag: text('etag'),
   lastModified: text('last_modified'),
@@ -27,6 +30,13 @@ export const collectionRuns = pgTable('collection_runs', {
   completedAt: timestamp('completed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [uniqueIndex('collection_runs_one_active_per_source_idx').on(table.sourceId).where(sql`${table.status} in ('queued', 'running')`)])
+
+export const collectionRunEvents = pgTable('collection_run_events', {
+  id: serial('id').primaryKey(),
+  runId: uuid('run_id').notNull().references(() => collectionRuns.id, { onDelete: 'cascade' }),
+  message: text('message').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [index('collection_run_events_run_idx').on(table.runId, table.id)])
 
 export const catalogVariants = pgTable('catalog_variants', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -85,7 +95,7 @@ export const sourceEvidence = pgTable('source_evidence', {
   sha256: text('sha256'),
 }, (table) => [uniqueIndex('source_evidence_run_unique_idx').on(table.runId)])
 
-export const catalogSchema = { catalogProducts, collectionRuns, catalogVariants, sourceListings, sourceListingCurrent, sourceListingObservations, sourceEvidence }
+export const catalogSchema = { catalogProducts, collectionRuns, collectionRunEvents, catalogVariants, sourceListings, sourceListingCurrent, sourceListingObservations, sourceEvidence }
 export type CatalogProduct = typeof catalogProducts.$inferSelect
 export type CatalogVariant = typeof catalogVariants.$inferSelect
 export type SourceListing = typeof sourceListings.$inferSelect

@@ -1,6 +1,6 @@
-import { desc, eq } from 'drizzle-orm'
+import { asc, desc, eq } from 'drizzle-orm'
 import { getDatabase } from '~/server/db/index.server'
-import { collectionRuns } from '~/server/db/schema'
+import { catalogSources, collectionRunEvents, collectionRuns } from '~/server/db/schema'
 import { enqueueJob } from '~/server/worker/index.server'
 
 function hasPostgresCode(error: unknown, code: string): boolean {
@@ -19,12 +19,24 @@ export async function listCollectionRunsFromDatabase(sourceId?: string) {
   return { runs: rows }
 }
 
-export async function enqueueCatalogCollectionInDatabase(sourceId: string) {
+export async function getCollectionRunFromDatabase(runId: string) {
+  const db = getDatabase()
+  const [row] = await db.select({ run: collectionRuns, sourceName: catalogSources.displayName })
+    .from(collectionRuns)
+    .innerJoin(catalogSources, eq(collectionRuns.sourceId, catalogSources.id))
+    .where(eq(collectionRuns.id, runId))
+  if (!row) throw new Error('Collection run not found')
+  const events = await db.select().from(collectionRunEvents)
+    .where(eq(collectionRunEvents.runId, runId)).orderBy(asc(collectionRunEvents.id))
+  return { ...row, events }
+}
+
+export async function enqueueCatalogCollectionInDatabase(sourceId: string, requestLimit: number) {
   let run: typeof collectionRuns.$inferSelect | undefined
   try {
     const insertedRuns = await getDatabase()
       .insert(collectionRuns)
-      .values({ sourceId, status: 'queued' })
+      .values({ sourceId, status: 'queued', requestLimit })
       .returning()
     run = insertedRuns[0]
   } catch (error) {
@@ -38,6 +50,7 @@ export async function enqueueCatalogCollectionInDatabase(sourceId: string) {
   }
   if (!run) throw new Error('The collection run could not be created')
   try {
+    await getDatabase().insert(collectionRunEvents).values({ runId: run.id, message: `Queued with a ceiling of ${requestLimit} requests.` })
     await enqueueJob('catalog.collect', { sourceId, runId: run.id })
   } catch (error) {
     await getDatabase().update(collectionRuns).set({ status: 'failed', error: `Queue enqueue failed: ${error instanceof Error ? error.message : String(error)}`, completedAt: new Date() }).where(eq(collectionRuns.id, run.id))

@@ -2,9 +2,9 @@ import type { Task, TaskList } from 'graphile-worker'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import { getDatabase } from '../db/index.server'
 import { catalogSources } from '../db/schema/catalog-sources'
-import { collectionRuns } from '../db/schema/catalog'
+import { collectionRunEvents, collectionRuns } from '../db/schema/catalog'
 import { persistCatalogSnapshot } from '../db/catalog-persistence.server'
-import { createShopifyCollectionRun, type ShopifyCollectionRun } from '../../modules/shopify/transport'
+import { createShopifyCollectionRun, type ShopifyCollectionRun, type ShopifyHttpClient } from '../../modules/shopify/transport'
 import { collectShopifySnapshot, type ShopifyCollectionPolicy } from '../../modules/shopify/collector'
 import robotsParser from 'robots-parser'
 import { shopifySourceConfigSchema } from '../../modules/shopify'
@@ -28,12 +28,14 @@ export const fixtureEchoTask: Task<'fixture.echo'> = async (payload, helpers) =>
 export interface CatalogCollectionTaskDependencies {
   accessPolicy?: (url: string) => Promise<boolean>
   run?: ShopifyCollectionRun
+  http?: ShopifyHttpClient
 }
 
 export function createRobotsAccessPolicy(
   run: ShopifyCollectionRun,
   http: typeof fetch = fetch,
   userAgent = 'Hoardcore/0.1 (conservative catalog collector)',
+  onRequest?: (requestCount: number, status?: number) => Promise<void> | void,
 ) {
   const cache = new Map<string, ReturnType<typeof robotsParser>>()
   return async (url: string): Promise<boolean> => {
@@ -43,10 +45,12 @@ export function createRobotsAccessPolicy(
     if (run.requests >= run.maxRequests) return false
     run.requests += 1
     try {
+      await onRequest?.(run.requests)
       const response = await http(`${origin}/robots.txt`, {
         headers: { accept: 'text/plain', 'user-agent': userAgent },
         signal: AbortSignal.timeout(5000),
       })
+      await onRequest?.(run.requests, response.status)
       if (!response.ok) return false
       const parser = robotsParser(`${origin}/robots.txt`, await response.text())
       cache.set(origin, parser)
@@ -73,9 +77,17 @@ export async function runCatalogCollection(
   }
   const policy: ShopifyCollectionPolicy & { catalogUrl: string } =
     shopifySourceConfigSchema.parse(source.config)
+  policy.maxRequests = runRecord.requestLimit
   const run = dependencies.run ?? createShopifyCollectionRun(policy.maxRequests)
+  async function log(message: string, requestCount = run.requests) {
+    await db.insert(collectionRunEvents).values({ runId: payload.runId, message })
+    await db.update(collectionRuns).set({ requestCount: String(requestCount) }).where(eq(collectionRuns.id, payload.runId))
+  }
   try {
-    const accessPolicy = dependencies.accessPolicy ?? createRobotsAccessPolicy(run, fetch, policy.userAgent)
+    await log('Collection started. Checking source access policy.')
+    const accessPolicy = dependencies.accessPolicy ?? createRobotsAccessPolicy(run, fetch, policy.userAgent, async (requestCount, status) => {
+      await log(status === undefined ? 'Checking robots.txt.' : `robots.txt responded with HTTP ${status}.`, requestCount)
+    })
     const catalogUrl = policy.catalogUrl
     const initialCache = { etag: priorRun?.etag ?? undefined, lastModified: priorRun?.lastModified ?? undefined }
     const observedAt = new Date()
@@ -84,13 +96,23 @@ export async function runCatalogCollection(
       sourceKey: source.sourceKey,
       cache: initialCache,
       policy,
-      http: (url, init) => fetch(url, init),
+      http: dependencies.http ?? ((url, init) => fetch(url, init)),
       accessPolicy,
       run,
       observedAt: observedAt.toISOString(),
+      onEvent: async (event) => {
+        await log(event.type === 'request_started'
+          ? `Request ${event.requestCount} of ${run.maxRequests}: fetching catalog page ${event.page}.`
+          : `Catalog page ${event.page} responded with HTTP ${event.status}.`, event.requestCount)
+      },
+      onPage: async (page, products, totalProducts) => {
+        await db.update(collectionRuns).set({ pageCount: page, productCount: totalProducts }).where(eq(collectionRuns.id, payload.runId))
+        await log(`Page ${page} contained ${products} products (${totalProducts} seen so far).`)
+      },
     })
 
-    if (result.status === 'ok') {
+    if (result.status !== 'not_modified') {
+      await log(`Saving ${result.records.length} listings from ${result.pageCount} fetched pages${result.status === 'partial' ? ' (incomplete collection)' : ''}.`)
       await persistCatalogSnapshot(db, source.id, result.records, {
         runId: payload.runId,
         observedAt,
@@ -98,19 +120,29 @@ export async function runCatalogCollection(
       })
     }
     await db.update(collectionRuns).set({
-      status: result.status === 'ok' ? 'succeeded' : 'not_modified',
+      status: result.status === 'ok' ? 'succeeded' : result.status,
       requestCount: String(result.requestCount),
+      pageCount: result.status === 'not_modified' ? 0 : result.pageCount,
+      productCount: result.status === 'not_modified' ? 0 : result.productCount,
       etag: result.cache.etag,
       lastModified: result.cache.lastModified,
       completedAt: new Date(),
     }).where(eq(collectionRuns.id, payload.runId))
     await db.update(catalogSources).set({ status: 'active', updatedAt: new Date() }).where(eq(catalogSources.id, source.id))
+    await log(result.status === 'partial'
+      ? `Request ceiling reached after ${result.pageCount} full pages. Saved ${result.productCount} products as a partial snapshot; more pages may exist.`
+      : result.status === 'not_modified' ? 'Source reported no change.' : `Complete snapshot saved: ${result.productCount} products.`)
     helpers.logger.info(`catalog.collect: ${source.id} completed`)
   } catch (error) {
     const requestCount = run.requests
-    await db.update(collectionRuns).set({ status: 'failed', requestCount: String(requestCount), error: error instanceof Error ? error.message : String(error), completedAt: new Date() }).where(eq(collectionRuns.id, payload.runId))
-    await db.update(catalogSources).set({ status: 'error', updatedAt: new Date() }).where(eq(catalogSources.id, source.id))
-    throw error
+    try {
+      await db.update(collectionRuns).set({ status: 'failed', requestCount: String(requestCount), error: error instanceof Error ? error.message : String(error), completedAt: new Date() }).where(eq(collectionRuns.id, payload.runId))
+      await db.update(catalogSources).set({ status: 'error', updatedAt: new Date() }).where(eq(catalogSources.id, source.id))
+      await log(`Collection stopped: ${error instanceof Error ? error.message : String(error)}`)
+    } catch (reportError) {
+      helpers.logger.info(`catalog.collect: ${source.id} could not record failure: ${String(reportError)}`)
+    }
+    helpers.logger.info(`catalog.collect: ${source.id} failed without automatic retry`)
   }
 }
 

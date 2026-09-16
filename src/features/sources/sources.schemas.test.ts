@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createCatalogSourceInputSchema } from './sources.schemas'
+import { createCatalogSourceInputSchema, manualCollectionRequestLimitSchema } from './sources.schemas'
 
 describe('catalog source input', () => {
   it('trims operator-facing names', () => {
@@ -20,5 +20,14 @@ describe('catalog source input', () => {
         config: {},
       }).success,
     ).toBe(false)
+  })
+})
+
+describe('manual collection ceiling', () => {
+  it('requires an explicit bounded whole number', () => {
+    expect(manualCollectionRequestLimitSchema.parse(6)).toBe(6)
+    expect(manualCollectionRequestLimitSchema.safeParse(1).success).toBe(false)
+    expect(manualCollectionRequestLimitSchema.safeParse(21).success).toBe(false)
+    expect(manualCollectionRequestLimitSchema.safeParse(3.5).success).toBe(false)
   })
 })
