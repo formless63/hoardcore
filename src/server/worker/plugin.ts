@@ -1,5 +1,7 @@
 import { definePlugin } from 'nitro'
-import { closeDatabase } from '~/server/db/db.server'
+import { join } from 'node:path'
+import { migrate } from 'drizzle-orm/node-postgres/migrator'
+import { closeDatabase, getDatabase } from '~/server/db/db.server'
 import { startWorker, stopWorker } from './lifecycle.server'
 
 /**
@@ -7,12 +9,17 @@ import { startWorker, stopWorker } from './lifecycle.server'
  * Graphile Worker in the same process/container as the HTTP application.
  */
 export default definePlugin((nitroApp) => {
-  // Defer one microtask so configuration/connection errors are captured by
-  // Nitro instead of escaping synchronous plugin initialization.
-  void Promise.resolve().then(startWorker).catch((error: unknown) => {
+  // Nitro plugins initialize synchronously. Keep readiness unavailable until
+  // the regular app process has applied committed migrations and started its
+  // embedded worker. A failed migration must terminate this instance.
+  void Promise.resolve().then(async () => {
+    await migrate(getDatabase(), { migrationsFolder: join(process.cwd(), 'drizzle') })
+    await startWorker()
+  }).catch((error: unknown) => {
     nitroApp.captureError?.(error instanceof Error ? error : new Error(String(error)), {
-      tags: ['worker', 'startup'],
+      tags: ['database', 'startup'],
     })
+    process.exit(1)
   })
 
   nitroApp.hooks.hook('close', async () => {

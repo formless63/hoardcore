@@ -17,14 +17,18 @@ Use your deployment system's secret store where available.
 
 ## Start and migrate
 
-Migrations are explicit and should be run before starting a new application version:
+The regular application container applies committed Drizzle migrations on startup, before its
+embedded worker becomes ready. No sidecar, one-off migration container, or host-installed Node.js
+toolchain is required for deployment:
 
 ```bash
-docker compose up -d db
-pnpm install --frozen-lockfile
-pnpm db:migrate
-docker compose up -d --build app
+docker compose up -d --build
+curl -fsS http://127.0.0.1:3000/api/ready
 ```
+
+For upgrades, take a backup first, then rebuild/restart the same app service. A migration failure
+stops the app instance and leaves readiness unavailable; inspect `docker compose logs app` before
+retrying. Do not start multiple app instances against the same database during an upgrade.
 
 The application listener and database listener are bound to loopback by default. Put a reviewed
 HTTPS reverse proxy or private access gateway in front of the application rather than publishing
@@ -48,14 +52,14 @@ storage):
 docker compose exec -T db pg_dump -U hoardcore -d hoardcore --format=custom > hoardcore.dump
 ```
 
-Restore into a newly created empty database, then point a verification instance at that database,
-apply any newer migrations, and check the application:
+Restore into a newly created empty database, then point the normal application service at that
+database. Its startup applies any newer migrations before readiness succeeds:
 
 ```bash
 docker compose exec -T db createdb -U hoardcore hoardcore_restore
 docker compose exec -T db pg_restore -U hoardcore -d hoardcore_restore < hoardcore.dump
-# Set DATABASE_URL to the restored database for the following verification.
-pnpm db:migrate
+# Set the app service DATABASE_URL to the restored database, then restart app.
+docker compose up -d --build app
 curl -fsS http://127.0.0.1:3000/api/health
 curl -fsS http://127.0.0.1:3000/api/ready
 ```

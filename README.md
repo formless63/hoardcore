@@ -63,12 +63,11 @@ database. CI provisions PostgreSQL 18, applies migrations, and enables these tes
 
 ## Container run
 
-Migrations are operator-controlled and are not generated or applied implicitly at runtime:
+The regular app container applies committed migrations before becoming ready; no migration
+sidecar or one-off container is needed:
 
 ```bash
-docker compose up -d db
-pnpm db:migrate
-docker compose up --build app
+docker compose up -d --build
 ```
 
 Use a configured OIDC provider for operator access. Review the deployment runbook before exposing
