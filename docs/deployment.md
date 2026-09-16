@@ -12,6 +12,10 @@ Copy `.env.example` to `.env` and set:
 - `BETTER_AUTH_URL` to the externally reachable HTTPS application URL
 - `OIDC_ISSUER`, `OIDC_CLIENT_ID`, and `OIDC_CLIENT_SECRET` together
 
+Register the application's exact `/api/auth/callback/oidc` URL in the identity provider. The
+client must permit the `openid`, `email`, and `profile` scopes so Hoardcore can create and identify
+an operator account.
+
 Keep `.env`, OIDC credentials, database passwords, and backups out of git and container images.
 Use your deployment system's secret store where available.
 

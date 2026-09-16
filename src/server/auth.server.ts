@@ -24,7 +24,18 @@ export function getAuth() {
     baseURL: config.BETTER_AUTH_URL,
     advanced: { useSecureCookies: config.BETTER_AUTH_URL?.startsWith('https://') ?? false },
     plugins: [
-      ...(config.OIDC_ISSUER ? [genericOAuth({ config: [{ providerId: 'oidc', clientId: config.OIDC_CLIENT_ID!, clientSecret: config.OIDC_CLIENT_SECRET!, discoveryUrl: normalizeOidcDiscoveryUrl(config.OIDC_ISSUER), requireIdTokenVerification: true }] })] : []),
+      ...(config.OIDC_ISSUER
+        ? [genericOAuth({
+            config: [{
+              providerId: 'oidc',
+              clientId: config.OIDC_CLIENT_ID!,
+              clientSecret: config.OIDC_CLIENT_SECRET!,
+              discoveryUrl: normalizeOidcDiscoveryUrl(config.OIDC_ISSUER),
+              requireIdTokenVerification: true,
+              scopes: ['openid', 'email', 'profile'],
+            }],
+          })]
+        : []),
       tanstackStartCookies(),
     ],
   }
