@@ -12,6 +12,7 @@ import { runMediaCapture } from '~/features/media/capture.server'
 import { getServerConfig } from '~/server/config.server'
 import { mediaCaptureRuns } from '~/server/db/schema/media'
 import { evaluateCollectionAlertsTask, deliverAlertsTask, type AlertTaskPayload, type AlertDeliveryTaskPayload } from '~/features/alerts/alerts.tasks'
+import { COLLECTION_DISABLED_MESSAGE } from '~/features/sources/collection-gate'
 
 /** Payloads for the application-owned durable task names. */
 export interface HoardcoreTaskPayloads {
@@ -36,6 +37,7 @@ export interface CatalogCollectionTaskDependencies {
   accessPolicy?: (url: string) => Promise<boolean>
   run?: ShopifyCollectionRun
   http?: ShopifyHttpClient
+  collectionEnabled?: boolean
 }
 
 export function createRobotsAccessPolicy(
@@ -74,6 +76,10 @@ export async function runCatalogCollection(
   dependencies: CatalogCollectionTaskDependencies = {},
 ) {
   const db = getDatabase()
+  if (!(dependencies.collectionEnabled ?? (getServerConfig().CATALOG_COLLECTION_ENABLED === 'true'))) {
+    await db.update(collectionRuns).set({ status: 'failed', error: COLLECTION_DISABLED_MESSAGE, completedAt: new Date() }).where(eq(collectionRuns.id, payload.runId))
+    throw new Error(COLLECTION_DISABLED_MESSAGE)
+  }
   const [source] = await db.select().from(catalogSources).where(eq(catalogSources.id, payload.sourceId))
   if (!source) throw new Error(`Catalog source ${payload.sourceId} was not found`)
   const [priorRun] = await db.select().from(collectionRuns).where(and(inArray(collectionRuns.status, ['succeeded', 'not_modified']), eq(collectionRuns.sourceId, source.id))).orderBy(desc(collectionRuns.completedAt)).limit(1)

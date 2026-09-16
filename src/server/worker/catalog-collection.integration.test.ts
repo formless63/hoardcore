@@ -39,4 +39,24 @@ describe.skipIf(!testDatabaseUrl)('catalog collection worker safety', () => {
     expect(events.at(-1)?.message).toContain('stopped')
     expect(http).toHaveBeenCalledTimes(1)
   })
+
+  it('rejects a disabled host before any source request', async () => {
+    const normalized = normalizeShopifyCatalogUrl(`https://fixture-${crypto.randomUUID()}.invalid/collections/sale`)
+    const [source] = await getDatabase().insert(catalogSources).values({
+      moduleId: 'shopify', displayName: 'Offline fixture', sourceKey: normalized.sourceKey, config: normalized.config,
+    }).returning({ id: catalogSources.id })
+    sourceId = source.id
+    const [run] = await getDatabase().insert(collectionRuns).values({ sourceId, requestLimit: 2 }).returning({ id: collectionRuns.id })
+    const http = vi.fn()
+
+    await expect(runCatalogCollection(
+      { sourceId, runId: run.id },
+      { logger: { info: vi.fn() } },
+      { collectionEnabled: false, http },
+    )).rejects.toThrow('Catalog collection is disabled on this deployment')
+
+    expect(http).not.toHaveBeenCalled()
+    const [recorded] = await getDatabase().select().from(collectionRuns).where(eq(collectionRuns.id, run.id))
+    expect(recorded).toMatchObject({ status: 'failed', requestCount: '0' })
+  })
 })

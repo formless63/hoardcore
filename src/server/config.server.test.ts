@@ -11,6 +11,7 @@ describe('parseServerConfig', () => {
     ).toEqual({
       DATABASE_URL: 'postgresql://hoardcore:secret@localhost:5432/hoardcore',
       MEDIA_CAPTURE_ENABLED: 'false',
+      CATALOG_COLLECTION_ENABLED: 'true',
     })
   })
 
@@ -18,6 +19,13 @@ describe('parseServerConfig', () => {
     expect(parseServerConfig({ DATABASE_URL: 'postgresql://localhost/hoardcore' }).MEDIA_CAPTURE_ENABLED).toBe('false')
     expect(parseServerConfig({ DATABASE_URL: 'postgresql://localhost/hoardcore', MEDIA_CAPTURE_ENABLED: 'true' }).MEDIA_CAPTURE_ENABLED).toBe('true')
     expect(() => parseServerConfig({ DATABASE_URL: 'postgresql://localhost/hoardcore', MEDIA_CAPTURE_ENABLED: 'yes' })).toThrow('MEDIA_CAPTURE_ENABLED')
+  })
+
+  it('allows a host to prohibit catalog source requests', () => {
+    const base = { DATABASE_URL: 'postgresql://localhost/hoardcore' }
+    expect(parseServerConfig(base).CATALOG_COLLECTION_ENABLED).toBe('true')
+    expect(parseServerConfig({ ...base, CATALOG_COLLECTION_ENABLED: 'false' }).CATALOG_COLLECTION_ENABLED).toBe('false')
+    expect(() => parseServerConfig({ ...base, CATALOG_COLLECTION_ENABLED: 'off' })).toThrow('CATALOG_COLLECTION_ENABLED')
   })
 
   it('reports a missing database URL by setting name', () => {

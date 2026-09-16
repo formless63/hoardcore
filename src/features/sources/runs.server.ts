@@ -2,6 +2,8 @@ import { asc, desc, eq } from 'drizzle-orm'
 import { getDatabase } from '~/server/db/index.server'
 import { catalogSources, collectionRunEvents, collectionRuns } from '~/server/db/schema'
 import { enqueueJob } from '~/server/worker/index.server'
+import { getServerConfig } from '~/server/config.server'
+import { assertCatalogCollectionEnabled } from './collection-gate'
 
 function hasPostgresCode(error: unknown, code: string): boolean {
   let current = error
@@ -32,6 +34,7 @@ export async function getCollectionRunFromDatabase(runId: string) {
 }
 
 export async function enqueueCatalogCollectionInDatabase(sourceId: string, requestLimit: number) {
+  assertCatalogCollectionEnabled(getServerConfig().CATALOG_COLLECTION_ENABLED === 'true')
   let run: typeof collectionRuns.$inferSelect | undefined
   try {
     const insertedRuns = await getDatabase()

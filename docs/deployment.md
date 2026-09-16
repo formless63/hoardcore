@@ -16,6 +16,8 @@ Copy `.env.example` to `.env` and set:
   for magic-link fallback sign-in; `SMTP_SECURE=true` is available for implicit TLS
 - `MEDIA_CAPTURE_ENABLED=true` only on an approved collection host when server-side photo
   capture is intended; it is disabled by default
+- `CATALOG_COLLECTION_ENABLED=false` on any host that must not make catalog source requests;
+  queued jobs are also rejected by the worker before network access
 
 Register the application's exact `/api/auth/callback/oidc` URL in the identity provider. The
 client must permit the `openid`, `email`, and `profile` scopes so Hoardcore can create and identify

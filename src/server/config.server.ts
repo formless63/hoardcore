@@ -28,6 +28,8 @@ const serverConfigSchema = z.object({
   SMTP_PASSWORD: optionalEnvironmentValue(z.string().min(1)),
   SMTP_FROM: optionalEnvironmentValue(z.email()),
   SMTP_SECURE: optionalEnvironmentValue(z.enum(['true', 'false'])),
+  // Disable collection entirely on hosts that must never contact source sites.
+  CATALOG_COLLECTION_ENABLED: z.enum(['true', 'false']).default('true'),
   // Media acquisition is disabled unless this deployment explicitly opts in.
   // Development hosts should leave this unset to avoid source-CDN requests.
   MEDIA_CAPTURE_ENABLED: z.enum(['true', 'false']).default('false'),
