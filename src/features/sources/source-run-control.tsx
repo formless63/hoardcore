@@ -29,7 +29,7 @@ export function SourceRunControl({ sourceId, run }: { sourceId: string; run?: Co
   const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [requestLimit, setRequestLimit] = useState(6)
+  const [requestLimit, setRequestLimit] = useState(3)
 
   useEffect(() => {
     if (run?.status !== 'queued' && run?.status !== 'running') return
@@ -56,7 +56,7 @@ export function SourceRunControl({ sourceId, run }: { sourceId: string; run?: Co
     <label className="flex items-center gap-2 text-xs text-muted-foreground">Request ceiling
       <Input className="h-8 w-20" type="number" min={2} max={20} step={1} value={requestLimit} onChange={(event) => setRequestLimit(Number(event.target.value))} />
     </label>
-    <p className="max-w-60 text-right text-xs text-muted-foreground">Includes the access-policy check. Partial pages are saved clearly as partial.</p>
+    <p className="max-w-60 text-right text-xs text-muted-foreground">Includes the access-policy check. Requests are spaced at least one second apart. Incomplete collections are saved as partial.</p>
     <div className="flex flex-wrap justify-end gap-2">
       <Button disabled={busy || requestLimit < 2 || requestLimit > 20 || !Number.isInteger(requestLimit) || run?.status === 'queued' || run?.status === 'running'} size="small" variant="secondary" onClick={() => void start(false)}>{busy ? 'Starting…' : 'Run in background'}</Button>
       <Button disabled={busy || requestLimit < 2 || requestLimit > 20 || !Number.isInteger(requestLimit) || run?.status === 'queued' || run?.status === 'running'} size="small" onClick={() => void start(true)}>Run &amp; watch</Button>

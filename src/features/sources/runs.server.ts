@@ -51,7 +51,9 @@ export async function enqueueCatalogCollectionInDatabase(sourceId: string, reque
   if (!run) throw new Error('The collection run could not be created')
   try {
     await getDatabase().insert(collectionRunEvents).values({ runId: run.id, message: `Queued with a ceiling of ${requestLimit} requests.` })
-    await enqueueJob('catalog.collect', { sourceId, runId: run.id })
+    // A process restart must not silently repeat source traffic. Operators
+    // decide when an interrupted collection is safe to run again.
+    await enqueueJob('catalog.collect', { sourceId, runId: run.id }, { maxAttempts: 1 })
   } catch (error) {
     await getDatabase().update(collectionRuns).set({ status: 'failed', error: `Queue enqueue failed: ${error instanceof Error ? error.message : String(error)}`, completedAt: new Date() }).where(eq(collectionRuns.id, run.id))
     throw new Error('The collection could not be queued. Try again.')
