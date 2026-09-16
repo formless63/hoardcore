@@ -1,0 +1,15 @@
+# Optional overlay for a containerized reverse proxy or private gateway.
+# Set APP_CONTAINER_NAME and GATEWAY_NETWORK in an ignored .env file on each host.
+services:
+  app:
+    container_name: ${APP_CONTAINER_NAME:?Set APP_CONTAINER_NAME for the gateway overlay}
+    networks:
+      default: {}
+      gateway:
+        aliases:
+          - ${APP_CONTAINER_NAME:?Set APP_CONTAINER_NAME for the gateway overlay}
+
+networks:
+  gateway:
+    external: true
+    name: ${GATEWAY_NETWORK:?Set GATEWAY_NETWORK for the gateway overlay}

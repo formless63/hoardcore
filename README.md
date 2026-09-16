@@ -74,4 +74,4 @@ Use a configured OIDC provider for operator access. Review the deployment runboo
 an early build to an untrusted network.
 
 See [the deployment runbook](docs/deployment.md) for secrets, migrations, health checks, backups,
-and conservative collection operations.
+containerized gateway networking, and conservative collection operations.

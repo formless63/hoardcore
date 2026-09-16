@@ -34,6 +34,18 @@ The application listener and database listener are bound to loopback by default.
 HTTPS reverse proxy or private access gateway in front of the application rather than publishing
 PostgreSQL or an unauthenticated application port directly.
 
+If that gateway runs in a container, `127.0.0.1` refers to the gateway container, not the app.
+Attach the app to the gateway's existing Docker network with the optional overlay:
+
+```bash
+# Set APP_CONTAINER_NAME and GATEWAY_NETWORK in the host's ignored .env first.
+docker compose -f compose.yaml -f compose.gateway.yaml up -d --build
+```
+
+Keep the app on its default Compose network for PostgreSQL. Configure the gateway's upstream as
+`http://<APP_CONTAINER_NAME>:3000` on the shared network. Use a distinct container name on each
+host; do not put installation-specific hostnames or network names in the public Compose files.
+
 ## Health, readiness, and restart
 
 - `/api/health` checks process liveness.
