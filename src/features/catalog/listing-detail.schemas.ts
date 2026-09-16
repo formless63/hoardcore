@@ -14,6 +14,7 @@ export const listingObservationSchema = z.object({
 
 export const listingDetailSchema = z.object({
   id: z.string(), url: z.string(), imageUrl: optionalText,
+  mediaCaptures: z.array(z.object({ id: z.string(), listingId: z.string(), sourceUrl: z.string(), capturedAt: z.date() })),
   source: z.object({ id: z.string(), displayName: z.string(), moduleId: z.string() }),
   product: z.object({ id: z.string(), title: z.string(), description: optionalText, brand: optionalText, productType: optionalText, tags: z.array(z.string()), imageUrls: z.array(z.string()) }),
   variant: z.object({ id: z.string(), title: optionalText, sku: optionalText, barcode: optionalText }),

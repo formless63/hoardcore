@@ -4,6 +4,7 @@ import { buttonStyles } from '~/components/ui/button'
 import { getPublicSession } from '~/features/auth/auth.functions'
 import { parseResearchPacket } from '~/features/research/research.schemas'
 import { previewResearchResult, type ResearchPreview } from '~/features/research/research.preview'
+import { importPastedResearch, saveResearchPacket } from '~/features/research/research.functions'
 
 export const Route = createFileRoute('/research/preview')({
   beforeLoad: async () => {
@@ -31,6 +32,8 @@ function ResearchPreviewPage() {
   const [resultJson, setResultJson] = useState('')
   const [preview, setPreview] = useState<ResearchPreview | undefined>()
   const [packetError, setPacketError] = useState<string | undefined>()
+  const [importMessage, setImportMessage] = useState<string | undefined>()
+  const [busy, setBusy] = useState(false)
 
   function validatePreview() {
     setPacketError(undefined)
@@ -43,6 +46,18 @@ function ResearchPreviewPage() {
     }
   }
 
+  async function confirmImport() {
+    setBusy(true); setImportMessage(undefined)
+    try {
+      const packet = parseResearchPacket(JSON.parse(packetJson))
+      await saveResearchPacket({ data: { packet } })
+      const saved = await importPastedResearch({ data: { resultJson } })
+      setImportMessage(`Imported ${saved.comparableCount} comparable${saved.comparableCount === 1 ? '' : 's'} (${saved.status}).`)
+    } catch (error) {
+      setImportMessage(error instanceof Error ? error.message : 'Import failed')
+    } finally { setBusy(false) }
+  }
+
   return (
     <main className="w-full px-2 py-3 sm:px-3" id="main-content">
       <h1 className="text-base font-semibold text-foreground">Validate research</h1>
@@ -52,7 +67,7 @@ function ResearchPreviewPage() {
           <span className="text-sm font-medium text-foreground">ResearchPacket JSON</span>
           <textarea
             value={packetJson}
-            onChange={(event) => setPacketJson(event.target.value)}
+            onChange={(event) => { setPacketJson(event.target.value); setPreview(undefined) }}
             className="mt-2 min-h-72 w-full rounded-md border border-border bg-card p-3 font-mono text-xs text-foreground outline-none focus:ring-2 focus:ring-ring"
             placeholder="Paste the exported ResearchPacket JSON"
             spellCheck={false}
@@ -62,7 +77,7 @@ function ResearchPreviewPage() {
           <span className="text-sm font-medium text-foreground">ResearchResult JSON</span>
           <textarea
             value={resultJson}
-            onChange={(event) => setResultJson(event.target.value)}
+            onChange={(event) => { setResultJson(event.target.value); setPreview(undefined) }}
             className="mt-2 min-h-72 w-full rounded-md border border-border bg-card p-3 font-mono text-xs text-foreground outline-none focus:ring-2 focus:ring-ring"
             placeholder="Paste the structured ResearchResult JSON"
             spellCheck={false}
@@ -72,8 +87,9 @@ function ResearchPreviewPage() {
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <button type="button" className={buttonStyles()} onClick={validatePreview}>Validate and preview</button>
-        <button type="button" className={buttonStyles({ variant: 'secondary' })} disabled title="Persistence is not implemented yet">Confirm import (coming soon)</button>
+        <button type="button" className={buttonStyles({ variant: 'secondary' })} disabled={busy || !preview || preview.status === 'invalid'} onClick={() => void confirmImport()}>Confirm import</button>
         {packetError ? <p className="text-sm text-destructive" role="alert">Packet: {packetError}</p> : null}
+        {importMessage ? <p className="text-sm text-muted-foreground" role="status">{importMessage}</p> : null}
       </div>
 
       {preview ? (

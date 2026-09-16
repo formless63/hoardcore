@@ -92,6 +92,12 @@ function RootDocument({ children }: { children: ReactNode }) {
                     Listings
                   </Link>
                   <Link
+                    to="/watchlist"
+                    className="rounded-md px-2 py-1 text-xs text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:bg-accent [&[data-status=active]]:text-accent-foreground"
+                  >
+                    Watchlist
+                  </Link>
+                  <Link
                     to="/research/preview"
                     className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:bg-accent [&[data-status=active]]:text-accent-foreground"
                   >

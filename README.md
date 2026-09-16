@@ -6,8 +6,8 @@ Hoardcore is an MIT-licensed, self-hosted inventory research tool. It is intende
 
 ## Status
 
-Early development. The authenticated catalog tracker and provider-neutral research interchange are
-usable in development. Live collection and deployment acceptance remain pending verification.
+Early development. The authenticated catalog tracker, research interchange, local photo cache,
+watchlists, and opt-in alerts are available. Operator acceptance of each deployment remains important.
 
 ### Available now
 
@@ -22,8 +22,11 @@ usable in development. Live collection and deployment acceptance remain pending 
   acceptance is still pending and must be performed by an operator against an approved source.
 - Current listings tracker with source/product/variant detail, observation history, and retained
   evidence.
-- Versioned research packet export and pasted-result validation preview. Import persistence is not
-  enabled yet.
+- Versioned research packet export, validated preview/import, immutable raw submissions,
+  manual comparable entry, and a scoped bearer-token API for coding agents.
+- Operator-queued, bounded photo capture with 96px thumbnails and 480px previews stored in
+  PostgreSQL. Browsers load captured images from authenticated Hoardcore routes, not source CDNs.
+- Per-user watched listings and opt-in ntfy alerts for watched items or saved filter views.
 - Liveness and database-readiness endpoints at `/api/health` and `/api/ready`.
 
 ## Source modules

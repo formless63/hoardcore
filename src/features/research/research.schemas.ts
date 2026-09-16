@@ -81,6 +81,29 @@ export const marketEstimateSchema = z.object({
 
 export type MarketEstimate = z.output<typeof marketEstimateSchema>
 
+/**
+ * A single verifiable market observation.  The channel is intentionally data,
+ * rather than an enum, so a marketplace does not become a core dependency.
+ */
+export const marketComparableSchema = z.object({
+  comparableId: nonEmpty,
+  channel: nonEmpty.max(120),
+  evidenceType: z.enum(['active_asking', 'completed_sale', 'retail_offer']),
+  price: z.number().nonnegative(),
+  shipping: z.number().nonnegative().optional(),
+  currency: z.string().trim().length(3),
+  condition: z.string().trim().min(1).max(120).optional(),
+  observedAt: timestamp.optional(),
+  soldAt: timestamp.optional(),
+  sampleSize: z.number().int().positive().optional(),
+  sampleWindow: z.string().trim().min(1).max(160).optional(),
+  url: z.url().optional(),
+  citationId: nonEmpty.optional(),
+  notes: z.string().trim().max(4_000).optional(),
+})
+
+export type MarketComparable = z.output<typeof marketComparableSchema>
+
 export const researchRiskSchema = z.object({
   description: nonEmpty,
   severity: z.enum(['low', 'medium', 'high', 'critical']),
@@ -102,6 +125,7 @@ export const researchResultRecordSchema = z.object({
   status: z.enum(['valid', 'partial', 'invalid']),
   claims: z.array(researchClaimSchema),
   marketEstimates: z.array(marketEstimateSchema),
+  comparables: z.array(marketComparableSchema).optional(),
   risks: z.array(researchRiskSchema),
   citations: z.array(citationSchema),
   diagnostics: z.array(validationDiagnosticSchema),
@@ -129,4 +153,3 @@ export function parseResearchPacket(input: unknown): ResearchPacket {
 export function parseResearchResult(input: unknown): ResearchResult {
   return researchResultSchema.parse(input)
 }
-

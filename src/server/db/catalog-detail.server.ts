@@ -3,6 +3,7 @@ import { catalogProducts, catalogVariants, collectionRuns, sourceEvidence, sourc
 import { catalogSources } from './schema/catalog-sources'
 import { listingDetailSchema, type ListingDetail } from '~/features/catalog/listing-detail.schemas'
 import type { Database } from './db.server'
+import { getProductMediaGallery } from '~/features/media/media.server'
 
 export async function getCatalogListingDetail(db: Database, listingId: string): Promise<ListingDetail | null> {
   const rows = await db.select({ listing: sourceListings, source: catalogSources, product: catalogProducts, variant: catalogVariants, current: sourceListingCurrent, observation: sourceListingObservations, evidence: sourceEvidence, run: collectionRuns })
@@ -18,6 +19,7 @@ export async function getCatalogListingDetail(db: Database, listingId: string): 
     .orderBy(desc(sourceListingObservations.observedAt))
   const first = rows[0]
   if (!first) return null
+  const mediaCaptures = await getProductMediaGallery(db, listingId)
   const observations = rows.flatMap((row) => row.observation ? [{ ...row.observation, evidence: row.evidence ? { ...row.evidence, payload: JSON.stringify(row.evidence.payload, null, 2), run: row.run } : null }] : [])
-  return listingDetailSchema.parse({ id: first.listing.id, url: first.listing.url, imageUrl: first.listing.imageUrl, source: { id: first.source.id, displayName: first.source.displayName, moduleId: first.source.moduleId }, product: first.product, variant: first.variant, current: first.current, observations })
+  return listingDetailSchema.parse({ id: first.listing.id, url: first.listing.url, imageUrl: first.listing.imageUrl, mediaCaptures, source: { id: first.source.id, displayName: first.source.displayName, moduleId: first.source.moduleId }, product: first.product, variant: first.variant, current: first.current, observations })
 }

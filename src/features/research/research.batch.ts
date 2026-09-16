@@ -105,6 +105,8 @@ export function renderResearchPrompt(packet: ResearchPacket, packetJson: string)
     `Use packetVersion ${packet.packetVersion} and promptVersion ${packet.promptVersion}.`,
     'Treat every sourceFacts value as a collected fact, not as a research claim.',
     'Add normalized claims only when supported by your research and include citation IDs for claims and estimates.',
+    'Use each record\'s optional comparables array for individual market evidence: channel, active_asking/completed_sale/retail_offer, price, shipping, currency, condition, timing, URL/citation, and notes.',
+    'Keep marketplace/channel names as values. Include completed-sale evidence separately from active asking prices; do not merge them into an unsupported estimate.',
     'Do not invent, change, or omit packetId, result references, product IDs, variant IDs, or listing IDs.',
     'If a record cannot be completed, retain its immutable reference, mark status partial or invalid, and add diagnostics.',
     'Return citations with URLs. Do not include prose outside the JSON result.',

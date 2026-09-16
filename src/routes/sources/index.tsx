@@ -8,6 +8,7 @@ import {
 import { listCatalogSources, listCollectionRuns } from '~/features/sources/sources.functions'
 import { getPublicSession } from '~/features/auth/auth.functions'
 import { getOperatorSettings } from '~/features/settings/settings.functions'
+import { getMediaCaptureAvailability, listMediaCaptureRuns } from '~/features/media/media.functions'
 
 export const Route = createFileRoute('/sources/')({
   beforeLoad: async ({ location }) => {
@@ -15,9 +16,11 @@ export const Route = createFileRoute('/sources/')({
   },
   head: () => ({ meta: [{ title: 'Sources · Hoardcore' }] }),
   loader: async () => {
-    const [{ sources }, { runs }, settings] = await Promise.all([listCatalogSources(), listCollectionRuns({ data: {} }), getOperatorSettings()])
+    const [{ sources }, { runs }, settings, mediaCapture] = await Promise.all([listCatalogSources(), listCollectionRuns({ data: {} }), getOperatorSettings(), getMediaCaptureAvailability()])
     const latestRuns = Object.fromEntries(sources.map((source) => [source.id, runs.find((run) => run.sourceId === source.id)]))
-    return { sources, latestRuns, settings }
+    const mediaHistory = await Promise.all(sources.map((source) => listMediaCaptureRuns({ data: { sourceId: source.id } })))
+    const latestMediaRuns = Object.fromEntries(sources.map((source, index) => [source.id, mediaHistory[index]?.[0]]))
+    return { sources, latestRuns, latestMediaRuns, settings, mediaCapture }
   },
   pendingComponent: SourceListPending,
   errorComponent: SourceLoadError,
@@ -25,7 +28,7 @@ export const Route = createFileRoute('/sources/')({
 })
 
 function SourcesPage() {
-  const { sources, latestRuns, settings } = Route.useLoaderData()
+  const { sources, latestRuns, latestMediaRuns, settings, mediaCapture } = Route.useLoaderData()
 
   return (
     <main className="w-full px-2 py-3 sm:px-3" id="main-content">
@@ -37,7 +40,7 @@ function SourcesPage() {
       </div>
 
       <section className="mt-3" aria-label="Registered catalog sources">
-        <SourceList sources={sources} latestRuns={latestRuns} defaultRequestLimit={settings.defaultCollectionRequestLimit} />
+        <SourceList sources={sources} latestRuns={latestRuns} latestMediaRuns={latestMediaRuns} defaultRequestLimit={settings.defaultCollectionRequestLimit} mediaCaptureEnabled={mediaCapture.enabled} />
       </section>
     </main>
   )

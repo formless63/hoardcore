@@ -74,5 +74,17 @@ describe('research interchange contracts', () => {
     expect(parsed.records[0]?.sourceFacts[0]).toHaveProperty('observedAt')
     expect(() => parseResearchPacket({ ...packet, records: [{ ...packet.records[0], sourceFacts: [{ field: 'demand', value: 'high' }] }] })).toThrow(/key/u)
   })
-})
 
+  it('validates portable active, sold, and retail comparable evidence', () => {
+    const result = parseResearchResult({
+      resultVersion: RESEARCH_RESULT_VERSION, packetVersion: RESEARCH_PACKET_VERSION, promptVersion: RESEARCH_PROMPT_VERSION,
+      schemaVersion: RESEARCH_RESULT_VERSION, packetId: 'p', resultId: 'comparables', completedAt: packet.createdAt,
+      records: [{ reference, status: 'valid', claims: [], marketEstimates: [], risks: [], citations: [], diagnostics: [], comparables: [
+        { comparableId: 'active-1', channel: 'marketplace', evidenceType: 'active_asking', price: 80, shipping: 9.5, currency: 'USD', condition: 'used', observedAt: packet.createdAt, url: 'https://research.example/active' },
+        { comparableId: 'sold-1', channel: 'marketplace', evidenceType: 'completed_sale', price: 65, currency: 'USD', soldAt: packet.createdAt, sampleSize: 3, sampleWindow: 'last 90 days' },
+        { comparableId: 'retail-1', channel: 'retailer', evidenceType: 'retail_offer', price: 99.99, currency: 'USD', notes: 'manual observation' },
+      ] }],
+    })
+    expect(result.records[0]?.comparables?.map((item) => item.evidenceType)).toEqual(['active_asking', 'completed_sale', 'retail_offer'])
+  })
+})

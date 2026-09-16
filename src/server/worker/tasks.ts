@@ -8,11 +8,18 @@ import { createShopifyCollectionRun, type ShopifyCollectionRun, type ShopifyHttp
 import { collectShopifySnapshot, type ShopifyCollectionPolicy } from '../../modules/shopify/collector'
 import robotsParser from 'robots-parser'
 import { shopifySourceConfigSchema } from '../../modules/shopify'
+import { runMediaCapture } from '~/features/media/capture.server'
+import { getServerConfig } from '~/server/config.server'
+import { mediaCaptureRuns } from '~/server/db/schema/media'
+import { evaluateCollectionAlertsTask, deliverAlertsTask, type AlertTaskPayload, type AlertDeliveryTaskPayload } from '~/features/alerts/alerts.tasks'
 
 /** Payloads for the application-owned durable task names. */
 export interface HoardcoreTaskPayloads {
   'fixture.echo': { value: string }
   'catalog.collect': { sourceId: string; runId: string }
+  'media.capture': { runId: string }
+  'alerts.evaluate': AlertTaskPayload
+  'alerts.deliver': AlertDeliveryTaskPayload
 }
 
 declare global {
@@ -63,7 +70,7 @@ export function createRobotsAccessPolicy(
 
 export async function runCatalogCollection(
   payload: HoardcoreTaskPayloads['catalog.collect'],
-  helpers: { logger: { info(message: string): void } },
+  helpers: { logger: { info(message: string): void }; addJob?: (name: 'alerts.evaluate', payload: AlertTaskPayload) => Promise<unknown> },
   dependencies: CatalogCollectionTaskDependencies = {},
 ) {
   const db = getDatabase()
@@ -113,11 +120,18 @@ export async function runCatalogCollection(
 
     if (result.status !== 'not_modified') {
       await log(`Saving ${result.records.length} listings from ${result.pageCount} fetched pages${result.status === 'partial' ? ' (incomplete collection)' : ''}.`)
-      await persistCatalogSnapshot(db, source.id, result.records, {
+      const persisted = await persistCatalogSnapshot(db, source.id, result.records, {
         runId: payload.runId,
         observedAt,
         evidence: { payload: result.evidencePayload, contentType: 'application/json' },
       })
+      if (persisted.length && helpers.addJob) {
+        try {
+          await helpers.addJob('alerts.evaluate', { runId: payload.runId, listingIds: persisted.map((item) => item.listingId) })
+        } catch (alertError) {
+          helpers.logger.info(`alerts.evaluate could not be queued; catalog persistence remains intact: ${String(alertError)}`)
+        }
+      }
     }
     await db.update(collectionRuns).set({
       status: result.status === 'ok' ? 'succeeded' : result.status,
@@ -153,8 +167,22 @@ export async function runCatalogCollection(
 
 export const catalogCollectTask: Task<'catalog.collect'> = async (payload, helpers) => runCatalogCollection(payload, helpers)
 
+export const mediaCaptureTask: Task<'media.capture'> = async (payload, helpers) => {
+  try {
+    await runMediaCapture(getDatabase(), payload.runId, { enabled: getServerConfig().MEDIA_CAPTURE_ENABLED === 'true' })
+    helpers.logger.info(`media.capture: ${payload.runId} finished`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await getDatabase().update(mediaCaptureRuns).set({ status: 'failed', error: message, completedAt: new Date() }).where(eq(mediaCaptureRuns.id, payload.runId))
+    helpers.logger.error(`media.capture: ${payload.runId} stopped: ${message}`)
+  }
+}
+
 /** The only task registry passed to Graphile Worker. Add source-independent tasks here. */
 export const taskRegistry = {
   'fixture.echo': fixtureEchoTask,
   'catalog.collect': catalogCollectTask,
+  'media.capture': mediaCaptureTask,
+  'alerts.evaluate': evaluateCollectionAlertsTask,
+  'alerts.deliver': deliverAlertsTask,
 } satisfies TaskList

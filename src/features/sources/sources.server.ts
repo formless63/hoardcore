@@ -30,7 +30,17 @@ function summarizeCatalogSource(source: CatalogSource): CatalogSourceSummary {
   const sourceModule = getSourceModule(source.moduleId)
 
   if (!sourceModule) {
-    throw new Error(`Catalog source ${source.id} uses an unavailable module: ${source.moduleId}`)
+    // Keep the source visible (and removable/exportable) if a module is no
+    // longer installed. One unavailable module must not hide every source.
+    return catalogSourceSummarySchema.parse({
+      id: source.id,
+      displayName: source.displayName,
+      moduleId: source.moduleId,
+      moduleName: source.moduleId,
+      status: source.status,
+      summary: 'Source module unavailable',
+      createdAt: source.createdAt.toISOString(),
+    })
   }
 
   const normalized = sourceModule.sourceRegistration.read(source.config)

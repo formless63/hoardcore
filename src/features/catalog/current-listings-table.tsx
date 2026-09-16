@@ -7,6 +7,10 @@ import type { CurrentListing } from './catalog.schemas'
 import { emptyListingFilters, listingDiscount, listingFiltersSchema, matchesListingFilters, type ListingFilters } from './listing-filters'
 import { deleteListingView, saveListingView } from './saved-views.functions'
 import { Input } from '~/components/ui/input'
+import { ResearchImportPanel } from '~/features/research/research-import-panel'
+import { CachedListingImage, mediaUrl } from '~/features/media/cached-listing-image'
+import { WatchButton } from '~/features/watchlist/watch-button'
+import type { ResearchSummariesByListing, ResearchComparableSummaryType } from '~/features/research/research.server'
 
 const features = tableFeatures({ rowSortingFeature, sortedRowModel: createSortedRowModel() })
 const helper = createColumnHelper<typeof features, CurrentListing>()
@@ -20,17 +24,24 @@ function money(value: string | null, currency: string | null) {
 }
 
 function ExportPanel({ listingIds }: { listingIds: string[] }) {
-  const [exported, setExported] = useState<{ prompt: string; packetJson: string }>()
+  const [exported, setExported] = useState<{ prompt: string; packetJson: string; packet: unknown }>()
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const run = async () => { setBusy(true); setError(''); try { setExported(await createResearchExport({ data: { listingIds } })) } catch (cause) { setError(cause instanceof Error ? cause.message : 'Export failed') } finally { setBusy(false) } }
   const copy = async (value: string) => { try { await navigator.clipboard.writeText(value) } catch { setError('Clipboard unavailable; select and copy the text manually.') } }
-  return <section className="mb-2 rounded border border-border bg-card p-2 text-xs" aria-label="Research packet export"><div className="flex flex-wrap items-center gap-3"><span>{listingIds.length} selected</span><button type="button" className="rounded bg-primary px-2 py-1 text-primary-foreground disabled:opacity-50" onClick={() => void run()} disabled={busy}>{busy ? 'Building…' : 'Create research packet'}</button></div>{error ? <p className="mt-2 text-destructive" role="alert">{error}</p> : null}{exported ? <div className="mt-2 grid gap-2 lg:grid-cols-2"><label>Copyable prompt <button type="button" className="text-primary underline" onClick={() => void copy(exported.prompt)}>Copy</button><textarea readOnly value={exported.prompt} className="mt-1 h-40 w-full rounded border border-border bg-muted p-2 font-mono text-xs" /></label><label>ResearchPacket JSON <button type="button" className="text-primary underline" onClick={() => void copy(exported.packetJson)}>Copy</button><textarea readOnly value={exported.packetJson} className="mt-1 h-40 w-full rounded border border-border bg-muted p-2 font-mono text-xs" /></label></div> : null}</section>
+  return <section className="mb-2 rounded border border-border bg-card p-2 text-xs" aria-label="Research packet export"><div className="flex flex-wrap items-center gap-3"><span>{listingIds.length} selected</span><button type="button" className="rounded bg-primary px-2 py-1 text-primary-foreground disabled:opacity-50" onClick={() => void run()} disabled={busy}>{busy ? 'Building…' : 'Create research packet'}</button></div>{error ? <p className="mt-2 text-destructive" role="alert">{error}</p> : null}{exported ? <><div className="mt-2 grid gap-2 lg:grid-cols-2"><label>Copyable prompt <button type="button" className="text-primary underline" onClick={() => void copy(exported.prompt)}>Copy</button><textarea readOnly value={exported.prompt} className="mt-1 h-40 w-full rounded border border-border bg-muted p-2 font-mono text-xs" /></label><label>ResearchPacket JSON <button type="button" className="text-primary underline" onClick={() => void copy(exported.packetJson)}>Copy</button><textarea readOnly value={exported.packetJson} className="mt-1 h-40 w-full rounded border border-border bg-muted p-2 font-mono text-xs" /></label></div><ResearchImportPanel packet={exported.packet} /></> : null}</section>
 }
 
-function makeColumns(selected: Set<string>, toggle: (id: string) => void, showVariants: boolean, showModules: boolean) { return helper.columns([
+function researchValue(summaries: ResearchSummariesByListing, listingId: string, kind: ResearchComparableSummaryType) {
+  const entries = summaries[listingId]?.[kind] ?? []
+  if (!entries.length) return '—'
+  const describe = (entry: typeof entries[number]) => `${entry.channel}: ${entry.medianPrice.toFixed(2)} ${entry.currency} (${entry.count})`
+  return <span className="block max-w-40 truncate" title={entries.map(describe).join(' · ')}>{entries.length === 1 ? describe(entries[0]!) : `${describe(entries[0]!)} +${entries.length - 1}`}</span>
+}
+
+function makeColumns(selected: Set<string>, toggle: (id: string) => void, showVariants: boolean, showModules: boolean, showMedia: (id: string | null) => void, watched: Set<string>, researchSummaries: ResearchSummariesByListing, showResearch: boolean) { return helper.columns([
   helper.display({ id: 'select', header: '', cell: (info) => <input aria-label={`Select ${info.row.original.productTitle}`} type="checkbox" checked={selected.has(info.row.original.id)} onChange={() => toggle(info.row.original.id)} /> }),
-  helper.display({ id: 'image', header: '', cell: (info) => info.row.original.imageUrl ? <img src={info.row.original.imageUrl} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" className="size-9 rounded border border-border object-contain" /> : null }),
+  helper.display({ id: 'image', header: '', cell: (info) => <span tabIndex={info.row.original.mediaCaptureId ? 0 : -1} onMouseEnter={() => showMedia(info.row.original.mediaCaptureId ?? null)} onMouseLeave={() => showMedia(null)} onFocus={() => showMedia(info.row.original.mediaCaptureId ?? null)} onBlur={() => showMedia(null)}><CachedListingImage captureId={info.row.original.mediaCaptureId} alt="" className="flex size-9 items-center justify-center rounded border border-border object-contain text-[8px] text-muted-foreground" /></span> }),
   helper.accessor('manufacturer', { header: 'Manufacturer', cell: (info) => info.getValue() || '—' }),
   helper.accessor('productTitle', { header: 'Title', cell: (info) => <Link className="block min-w-48 max-w-xl truncate text-primary hover:underline" title={info.getValue()} to="/listings/$listingId" params={{ listingId: info.row.original.id }}>{info.getValue()}</Link> }),
   helper.accessor('category', { header: 'Category', cell: (info) => info.getValue() || '—' }),
@@ -39,7 +50,13 @@ function makeColumns(selected: Set<string>, toggle: (id: string) => void, showVa
   helper.accessor('compareAtPrice', { header: 'Was', cell: (info) => info.getValue() && Number(info.getValue()) > Number(info.row.original.price ?? 0) ? <span className="text-muted-foreground line-through">{money(info.getValue(), info.row.original.currency)}</span> : '—' }),
   helper.accessor((listing) => listingDiscount(listing)?.percent ?? -1, { id: 'discount', header: 'Off', cell: (info) => info.getValue() >= 0 ? `${Math.round(info.getValue())}%` : '—' }),
   helper.accessor('available', { header: 'Stock', cell: (info) => <span title="Source reports availability, not a quantity" className={info.getValue() ? 'text-foreground' : 'text-muted-foreground'}>{info.getValue() ? 'In stock' : 'Out'}</span> }),
+  ...(showResearch ? [
+    helper.display({ id: 'research-asking', header: 'Research asking', cell: (info) => researchValue(researchSummaries, info.row.original.id, 'active_asking') }),
+    helper.display({ id: 'research-sold', header: 'Research sold', cell: (info) => researchValue(researchSummaries, info.row.original.id, 'completed_sale') }),
+    helper.display({ id: 'research-retail', header: 'Research retail', cell: (info) => researchValue(researchSummaries, info.row.original.id, 'retail_offer') }),
+  ] : []),
   helper.accessor('sourceName', { header: 'Source' }),
+  helper.display({ id: 'watch', header: 'Watch', cell: (info) => <WatchButton listingId={info.row.original.id} initialWatched={watched.has(info.row.original.id)} /> }),
   helper.accessor('observedAt', { header: 'Observed', cell: (info) => <time dateTime={info.getValue().toISOString()} title={info.getValue().toLocaleString()}>{info.getValue().toISOString().slice(2, 10)}</time> }),
   ...(showVariants ? [helper.accessor('variantTitle', { header: 'Variant', cell: (info) => info.getValue() || '—' })] : []),
   ...(showModules ? [helper.accessor('moduleId', { header: 'Module' })] : []),
@@ -56,7 +73,7 @@ function NumberFilter({ label, value, onChange, max = 1_000_000_000 }: { label: 
   return <label className="flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">{label}<input aria-label={label} type="number" min="0" max={max} step="any" value={value ?? ''} onChange={(event) => onChange(event.target.value === '' ? null : Number(event.target.value))} className="h-8 w-20 rounded border border-border bg-background px-1.5 text-xs text-foreground" /></label>
 }
 
-export function CurrentListingsTable({ listings, savedViews }: { listings: CurrentListing[]; savedViews: SavedView[] }) {
+export function CurrentListingsTable({ listings, savedViews, watchedListingIds = [], researchSummaries = {} }: { listings: CurrentListing[]; savedViews: SavedView[]; watchedListingIds?: string[]; researchSummaries?: ResearchSummariesByListing }) {
   const [filters, setFilters] = useState<ListingFilters>(emptyListingFilters)
   const [selectedViewId, setSelectedViewId] = useState('')
   const [viewName, setViewName] = useState('')
@@ -67,8 +84,10 @@ export function CurrentListingsTable({ listings, savedViews }: { listings: Curre
   const deleteView = useServerFn(deleteListingView)
   const [sorting, setSorting] = useState<SortingState>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [hoveredMediaId, setHoveredMediaId] = useState<string | null>(null)
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(50)
+  const watched = useMemo(() => new Set(watchedListingIds), [watchedListingIds])
   const options = useMemo(() => ({ categories: [...new Set(listings.map((item) => item.category).filter((value): value is string => Boolean(value)))].sort(), manufacturers: [...new Set(listings.map((item) => item.manufacturer).filter((value): value is string => Boolean(value)))].sort(), sources: [...new Map(listings.map((item) => [item.sourceId, item.sourceName])).entries()].sort((a, b) => a[1].localeCompare(b[1])) }), [listings])
   const data = useMemo(() => listings.filter((item) => matchesListingFilters(item, filters)), [listings, filters])
   function updateFilter<K extends keyof ListingFilters>(key: K, value: ListingFilters[K]) {
@@ -106,11 +125,13 @@ export function CurrentListingsTable({ listings, savedViews }: { listings: Curre
   const toggle = (id: string) => setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })
   const showVariants = listings.some((item) => item.variantTitle && item.variantTitle !== 'Default Title')
   const showModules = new Set(listings.map((item) => item.moduleId)).size > 1
-  const table = useTable({ features, data, columns: makeColumns(selected, toggle, showVariants, showModules), state: { sorting }, onSortingChange: setSorting })
+  const showResearch = Object.keys(researchSummaries).length > 0
+  const table = useTable({ features, data, columns: makeColumns(selected, toggle, showVariants, showModules, setHoveredMediaId, watched, researchSummaries, showResearch), state: { sorting }, onSortingChange: setSorting })
   const rows = table.getRowModel().rows
   const pageCount = Math.max(1, Math.ceil(rows.length / pageSize))
   const safePage = Math.min(page, pageCount - 1)
   return <div>
+    {hoveredMediaId ? <div className="pointer-events-none fixed bottom-3 right-3 z-50 flex size-64 items-center justify-center rounded border border-border bg-card p-2 shadow-xl" role="img" aria-label="Larger captured listing image"><img src={mediaUrl(hoveredMediaId, 'preview')} alt="" className="max-h-full max-w-full object-contain" /></div> : null}
     {selected.size ? <ExportPanel listingIds={[...selected]} /> : null}
     <div className="mb-1.5 flex flex-wrap items-center gap-1.5"><Input aria-label="Search current listings" className="h-8 min-w-52 flex-1 text-xs sm:max-w-sm" placeholder="Search title, SKU, tag…" value={filters.query} onChange={(event) => updateFilter('query', event.target.value)} /><FilterSelect label="Categories" value={filters.category} values={options.categories} onChange={(value) => updateFilter('category', value)} /><FilterSelect label="Manufacturers" value={filters.manufacturer} values={options.manufacturers} onChange={(value) => updateFilter('manufacturer', value)} /><select aria-label="Sources" value={filters.sourceId} onChange={(event) => updateFilter('sourceId', event.target.value)} className="h-8 max-w-48 rounded border border-border bg-background px-1.5 text-xs text-foreground"><option value="">All sources</option>{options.sources.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select><select aria-label="Stock" value={filters.stock} onChange={(event) => updateFilter('stock', event.target.value as ListingFilters['stock'])} className="h-8 rounded border border-border bg-background px-1.5 text-xs text-foreground"><option value="all">All stock</option><option value="in">In stock</option><option value="out">Out</option></select><span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">{rows.length.toLocaleString()} listings</span></div>
     <div className="mb-1.5 flex flex-wrap items-center gap-1.5"><NumberFilter label="Price min" value={filters.minPrice} onChange={(value) => updateFilter('minPrice', value)} /><NumberFilter label="Price max" value={filters.maxPrice} onChange={(value) => updateFilter('maxPrice', value)} /><NumberFilter label="Off min" value={filters.minDiscountAmount} onChange={(value) => updateFilter('minDiscountAmount', value)} /><NumberFilter label="Off max" value={filters.maxDiscountAmount} onChange={(value) => updateFilter('maxDiscountAmount', value)} /><NumberFilter label="Off % min" value={filters.minDiscountPercent} max={100} onChange={(value) => updateFilter('minDiscountPercent', value)} /><NumberFilter label="Off % max" value={filters.maxDiscountPercent} max={100} onChange={(value) => updateFilter('maxDiscountPercent', value)} /><button type="button" onClick={() => loadView('')} className="text-xs text-primary hover:underline">Clear</button></div>

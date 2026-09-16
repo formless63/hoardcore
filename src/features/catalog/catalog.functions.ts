@@ -9,6 +9,7 @@ import { inArray, desc, eq } from 'drizzle-orm'
 import { catalogProducts, catalogVariants, sourceEvidence, sourceListingCurrent, sourceListingObservations, sourceListings } from '~/server/db/schema/catalog'
 import { catalogSources } from '~/server/db/schema/catalog-sources'
 import { createResearchBatchExport } from '~/features/research/research.batch'
+import { persistResearchBatchExport } from '~/features/research/research.server'
 
 export const listCurrentListings = createServerFn({ method: 'GET' }).handler(async () => {
   await requireSession()
@@ -20,7 +21,7 @@ export const listCurrentListings = createServerFn({ method: 'GET' }).handler(asy
 export const createResearchExport = createServerFn({ method: 'POST' })
   .validator(z.object({ listingIds: z.array(z.uuid()).min(1).max(100) }))
   .handler(async ({ data }) => {
-    await requireSession()
+    const session = await requireSession()
     setResponseHeader('Cache-Control', 'private, no-store')
     const rows = await getDatabase().select({ listing: sourceListings, current: sourceListingCurrent, product: catalogProducts, variant: catalogVariants, source: catalogSources, evidence: sourceEvidence })
       .from(sourceListings).innerJoin(sourceListingCurrent, eq(sourceListingCurrent.listingId, sourceListings.id)).innerJoin(catalogProducts, eq(catalogProducts.id, sourceListings.productId)).innerJoin(catalogVariants, eq(catalogVariants.id, sourceListings.variantId)).innerJoin(catalogSources, eq(catalogSources.id, sourceListings.sourceId)).leftJoin(sourceListingObservations, eq(sourceListingObservations.listingId, sourceListings.id)).leftJoin(sourceEvidence, eq(sourceEvidence.id, sourceListingObservations.evidenceId)).where(inArray(sourceListings.id, data.listingIds)).orderBy(desc(sourceListingObservations.observedAt))
@@ -52,5 +53,5 @@ export const createResearchExport = createServerFn({ method: 'POST' })
       },
       evidenceId: row.evidence?.id,
     }))
-    return createResearchBatchExport(records)
+    return persistResearchBatchExport(getDatabase(), session.user.id, createResearchBatchExport(records))
   })

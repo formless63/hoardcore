@@ -20,6 +20,9 @@ const serverConfigSchema = z.object({
   OIDC_ISSUER: optionalEnvironmentValue(z.url()),
   OIDC_CLIENT_ID: optionalEnvironmentValue(z.string().min(1)),
   OIDC_CLIENT_SECRET: optionalEnvironmentValue(z.string().min(1)),
+  // Media acquisition is disabled unless this deployment explicitly opts in.
+  // Development hosts should leave this unset to avoid source-CDN requests.
+  MEDIA_CAPTURE_ENABLED: z.enum(['true', 'false']).default('false'),
 }).superRefine((config, context) => {
   const oidc = [config.OIDC_ISSUER, config.OIDC_CLIENT_ID, config.OIDC_CLIENT_SECRET]
   if (oidc.some(Boolean) && !oidc.every(Boolean)) {

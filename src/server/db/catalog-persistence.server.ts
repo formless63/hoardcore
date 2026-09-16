@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 import { catalogProducts, catalogVariants, collectionRuns, sourceEvidence, sourceListingCurrent, sourceListingObservations, sourceListings } from './schema/catalog'
 import { catalogSources } from './schema/catalog-sources'
 import type { Database } from './db.server'
+import { getListingMediaCaptures } from '~/features/media/media.server'
 
 export interface CatalogObservationInput {
   observedAt?: Date
@@ -11,7 +12,7 @@ export interface CatalogObservationInput {
 }
 
 export async function listCurrentCatalogListings(db: Database) {
-  return db.select({
+  const listings = await db.select({
     id: sourceListings.id,
     url: sourceListings.url,
     sourceId: catalogSources.id,
@@ -37,6 +38,8 @@ export async function listCurrentCatalogListings(db: Database) {
     .innerJoin(catalogSources, eq(catalogSources.id, sourceListings.sourceId))
     .innerJoin(catalogProducts, eq(catalogProducts.id, sourceListings.productId))
     .innerJoin(catalogVariants, eq(catalogVariants.id, sourceListings.variantId))
+  const captures = await getListingMediaCaptures(db, listings.map((listing) => listing.id))
+  return listings.map((listing) => ({ ...listing, mediaCaptureId: captures.get(listing.id)?.id ?? null }))
 }
 
 /** Atomically reconciles current catalog state while retaining every supplied observation. */

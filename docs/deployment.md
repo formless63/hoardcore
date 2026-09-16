@@ -11,6 +11,8 @@ Copy `.env.example` to `.env` and set:
 - `BETTER_AUTH_SECRET` to a long random value
 - `BETTER_AUTH_URL` to the externally reachable HTTPS application URL
 - `OIDC_ISSUER`, `OIDC_CLIENT_ID`, and `OIDC_CLIENT_SECRET` together
+- `MEDIA_CAPTURE_ENABLED=true` only on an approved collection host when server-side photo
+  capture is intended; it is disabled by default
 
 Register the application's exact `/api/auth/callback/oidc` URL in the identity provider. The
 client must permit the `openid`, `email`, and `profile` scopes so Hoardcore can create and identify
@@ -87,7 +89,34 @@ curl -fsS http://127.0.0.1:3000/api/ready
 ```
 
 Test backups by restoring them periodically. Protect backup files as carefully as the database,
-because retained source evidence may contain catalog content.
+because retained source evidence, research payloads, notification settings, and cached image
+bytes are included in PostgreSQL backups.
+
+## Photos, research, and notifications
+
+Photo capture is separate from catalog collection and is never automatic. On an approved host,
+set `MEDIA_CAPTURE_ENABLED=true`, restart the regular app service, then use a source's
+**Capture photos** control to queue a bounded batch. The HTTP request ceiling includes access-policy
+checks; requests are paced serially and honor source controls. Repeat only after reviewing each
+batch's outcome. Leave the flag unset or `false` on a host whose network address should not make
+source-CDN requests. Existing image URLs remain catalog evidence, but an uncaptured image shows a
+placeholder rather than making the viewer's browser fetch it from the source. PostgreSQL holds
+deduplicated, re-encoded small derivatives, so include it in capacity planning and backups.
+
+Research packets can be copied into an external research tool, then validated and imported through
+the UI. Manual comparables use the same contract. External coding agents can use a revocable,
+scoped research token issued at **Settings → Research API tokens**; treat that token as a secret.
+The authenticated user must first create a research packet for the target listings. An agent can
+then submit a versioned `ResearchResult` for that packet with
+`POST /api/research/import`, `Authorization: Bearer <token>`, and a JSON body shaped as
+`{ "result": { ... } }`. The endpoint accepts only the token owner's packets and never contacts an
+AI provider. See `src/features/research/research.schemas.ts` for the versioned contract.
+
+Notifications are off by default. Each user must configure a public HTTPS ntfy origin and topic,
+enable notifications globally, then opt in individual watched listings or saved filter views and
+their event types. The app does not contact ntfy until these settings are enabled. Use a private,
+unguessable topic or a protected ntfy deployment; do not treat the topic name alone as an access
+control mechanism.
 
 ## Collection safety
 
