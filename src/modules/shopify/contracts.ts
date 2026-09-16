@@ -1,8 +1,10 @@
 import { z } from 'zod'
 import type { NormalizedCatalogRecord } from '../types'
 
-const optionalText = z.string().trim().min(1).optional()
-const optionalUrl = z.url().optional()
+// Shopify storefronts commonly emit empty strings or null for optional
+// metadata. Treat those as absent without weakening required identity fields.
+const optionalText = z.string().trim().nullish().transform((value) => value || undefined)
+const optionalUrl = z.string().trim().nullish().transform((value) => value || undefined).pipe(z.url().optional())
 
 /** The deliberately small subset of Shopify's collection JSON we consume. */
 export const shopifyVariantSchema = z.object({
@@ -16,21 +18,21 @@ export const shopifyVariantSchema = z.object({
   featured_image: z.object({ src: optionalUrl }).nullable().optional(),
 })
 
-export const shopifyImageSchema = z.object({ src: z.url() })
+export const shopifyImageSchema = z.object({ src: optionalUrl })
 
 export const shopifyProductSchema = z.object({
   id: z.union([z.string(), z.number()]).transform(String),
   title: z.string().trim().min(1),
   handle: z.string().trim().min(1),
-  body_html: z.string().optional(),
+  body_html: optionalText,
   vendor: optionalText,
   product_type: optionalText,
-  tags: z.union([z.string(), z.array(z.string())]).optional(),
+  tags: z.union([z.string(), z.array(z.string())]).nullish(),
   published_at: z.string().nullable().optional(),
   updated_at: z.string().nullable().optional(),
   available: z.boolean().optional(),
   variants: z.array(shopifyVariantSchema).min(1),
-  images: z.array(shopifyImageSchema).optional(),
+  images: z.array(shopifyImageSchema).nullish(),
 })
 
 export const shopifyCollectionResponseSchema = z.object({

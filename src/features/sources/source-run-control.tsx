@@ -61,7 +61,7 @@ export function SourceRunControl({ sourceId, run }: { sourceId: string; run?: Co
       <Button disabled={busy || requestLimit < 2 || requestLimit > 20 || !Number.isInteger(requestLimit) || run?.status === 'queued' || run?.status === 'running'} size="small" variant="secondary" onClick={() => void start(false)}>{busy ? 'Starting…' : 'Run in background'}</Button>
       <Button disabled={busy || requestLimit < 2 || requestLimit > 20 || !Number.isInteger(requestLimit) || run?.status === 'queued' || run?.status === 'running'} size="small" onClick={() => void start(true)}>Run &amp; watch</Button>
     </div>
-    {run?.status === 'failed' && run.error ? <p className="max-w-xs text-right text-xs text-destructive" role="alert">{run.error}</p> : null}
+    {(run?.status === 'failed' || run?.status === 'partial') && run.error ? <p className="max-w-xs text-right text-xs text-destructive" role="alert">{run.error}</p> : null}
     {error ? <p className="max-w-xs text-right text-xs text-destructive" role="alert">{error}</p> : null}
   </div>
 }

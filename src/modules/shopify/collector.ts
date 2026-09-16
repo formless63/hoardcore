@@ -1,4 +1,5 @@
 import type { NormalizedCatalogRecord } from '../types'
+import { ZodError } from 'zod'
 import { normalizeShopifyCollection, parseShopifyCollection } from './contracts'
 import {
   createShopifyCollectionRun,
@@ -46,6 +47,7 @@ export type ShopifySnapshotResult =
       productCount: number
       records: NormalizedCatalogRecord[]
       evidencePayload: unknown
+      incomplete?: { kind: 'request_ceiling' | 'invalid_page'; page: number; detail?: string }
     }
 
 /**
@@ -60,7 +62,11 @@ export async function collectShopifySnapshot(
   let firstPageCache: ShopifyCacheEntry | undefined
   let productCount = 0
 
-  function snapshot(status: 'ok' | 'partial'): ShopifySnapshotResult {
+  function snapshot(
+    status: 'ok' | 'partial',
+    incomplete?: { kind: 'request_ceiling' | 'invalid_page'; page: number; detail?: string },
+    rejectedPage?: unknown,
+  ): ShopifySnapshotResult {
     const merged = { products: pages.flatMap((payload) => parseShopifyCollection(payload).products) }
     return {
       status,
@@ -68,12 +74,15 @@ export async function collectShopifySnapshot(
       requestCount: run.requests,
       pageCount: pages.length,
       productCount,
+      incomplete,
       records: normalizeShopifyCollection(merged, {
         sourceKey: input.sourceKey,
         baseUrl: input.catalogUrl,
         observedAt: input.observedAt,
       }),
-      evidencePayload: merged,
+      // Preserve the source JSON, including blank optional fields that the
+      // normalized records intentionally omit.
+      evidencePayload: rejectedPage === undefined ? { pages } : { pages, rejectedPage },
     }
   }
 
@@ -95,7 +104,7 @@ export async function collectShopifySnapshot(
       )
     } catch (error) {
       if (error instanceof ShopifyCollectionTransportError && error.kind === 'request_ceiling' && pages.length > 0) {
-        return snapshot('partial')
+        return snapshot('partial', { kind: 'request_ceiling', page })
       }
       throw error
     }
@@ -109,8 +118,15 @@ export async function collectShopifySnapshot(
     }
 
     if (page === 1) firstPageCache = result.cache
+    let parsedPage: ReturnType<typeof parseShopifyCollection>
+    try {
+      parsedPage = parseShopifyCollection(result.payload)
+    } catch (error) {
+      if (!(error instanceof ZodError) || pages.length === 0) throw error
+      const detail = error.issues.slice(0, 3).map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')
+      return snapshot('partial', { kind: 'invalid_page', page, detail }, result.payload)
+    }
     pages.push(result.payload)
-    const parsedPage = parseShopifyCollection(result.payload)
     productCount += parsedPage.products.length
     await input.onPage?.(page, parsedPage.products.length, productCount)
 

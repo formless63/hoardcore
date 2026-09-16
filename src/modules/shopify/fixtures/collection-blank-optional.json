@@ -1,0 +1,31 @@
+{
+  "products": [
+    {
+      "id": 501,
+      "title": "Fixture Relay",
+      "handle": "fixture-relay",
+      "body_html": "",
+      "vendor": "  ",
+      "product_type": "",
+      "tags": null,
+      "variants": [{
+        "id": 5001,
+        "title": "",
+        "sku": null,
+        "barcode": "  ",
+        "price": "10.00",
+        "featured_image": { "src": "" }
+      }],
+      "images": [{ "src": null }]
+    },
+    {
+      "id": 502,
+      "title": "Fixture Panel",
+      "handle": "fixture-panel",
+      "vendor": null,
+      "product_type": null,
+      "images": null,
+      "variants": [{ "id": 5002 }]
+    }
+  ]
+}

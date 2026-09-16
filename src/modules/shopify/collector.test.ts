@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { collectShopifySnapshot, type ShopifyCollectionPolicy } from './collector'
 import { createShopifyCollectionRun, type ShopifyHttpResponse } from './transport'
+import blankOptionalFixture from './fixtures/collection-blank-optional.json'
 
 const policy: ShopifyCollectionPolicy = {
   minimumDelayMs: 0,
@@ -44,7 +45,7 @@ describe('Shopify collection snapshot orchestration', () => {
     expect(result).toMatchObject({ status: 'ok', requestCount: 2, cache: { etag: '"page-one"' } })
     if (result.status !== 'ok') throw new Error('Expected a complete snapshot')
     expect(result.records).toHaveLength(251)
-    expect((result.evidencePayload as { products: unknown[] }).products).toHaveLength(251)
+    expect((result.evidencePayload as { pages: unknown[] }).pages).toHaveLength(2)
     expect(http).toHaveBeenCalledTimes(2)
   })
 
@@ -62,6 +63,22 @@ describe('Shopify collection snapshot orchestration', () => {
     })
 
     expect(result).toEqual({ status: 'not_modified', cache, requestCount: 1 })
+  })
+
+  it('retains raw blank optional fields as evidence while normalizing them away', async () => {
+    const result = await collectShopifySnapshot({
+      catalogUrl: 'https://store.invalid/collections/sale',
+      sourceKey: 'store.invalid/collections/sale',
+      policy,
+      http: async () => response(blankOptionalFixture),
+      accessPolicy: async () => true,
+      sleep: async () => {},
+    })
+
+    expect(result.status).toBe('ok')
+    if (result.status === 'not_modified') throw new Error('Expected a snapshot')
+    expect(result.records[0]?.product.productType).toBeUndefined()
+    expect((result.evidencePayload as { pages: typeof blankOptionalFixture[] }).pages[0]?.products[0]?.product_type).toBe('')
   })
 
   it('returns a marked partial snapshot when the shared ceiling is reached', async () => {
@@ -82,5 +99,31 @@ describe('Shopify collection snapshot orchestration', () => {
     if (result.status === 'not_modified') throw new Error('Expected a partial snapshot')
     expect(result.records).toHaveLength(250)
     expect(http).toHaveBeenCalledTimes(1)
+  })
+
+  it('saves prior valid pages as partial when a later page fails validation', async () => {
+    const firstPage = { products: Array.from({ length: 250 }, (_, index) => product(index + 1)) }
+    const rejectedPage = { products: [{ id: 251, title: '', handle: 'invalid', variants: [{ id: 2510 }] }] }
+    const http = vi.fn()
+      .mockResolvedValueOnce(response(firstPage))
+      .mockResolvedValueOnce(response(rejectedPage))
+
+    const result = await collectShopifySnapshot({
+      catalogUrl: 'https://store.invalid/collections/sale',
+      sourceKey: 'store.invalid/collections/sale',
+      policy,
+      http,
+      accessPolicy: async () => true,
+      sleep: async () => {},
+    })
+
+    expect(result).toMatchObject({
+      status: 'partial', requestCount: 2, pageCount: 1, productCount: 250,
+      incomplete: { kind: 'invalid_page', page: 2 },
+    })
+    if (result.status === 'not_modified') throw new Error('Expected a partial snapshot')
+    expect(result.records).toHaveLength(250)
+    expect(result.evidencePayload).toMatchObject({ rejectedPage })
+    expect(http).toHaveBeenCalledTimes(2)
   })
 })

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { shopifyModule, shopifySourceInputSchema } from '.'
 import validFixture from './fixtures/collection-valid.json'
 import partialFixture from './fixtures/collection-partial.json'
+import blankOptionalFixture from './fixtures/collection-blank-optional.json'
 import malformedFixture from './fixtures/collection-malformed.json'
 import { normalizeShopifyCollection, parseShopifyCollection } from './contracts'
 
@@ -87,6 +88,25 @@ describe('Shopify source registration', () => {
       variant: { variantKey: 'shopify:catalog-b.example:product:303:variant:3001', available: false },
       listing: { listingKey: 'catalog-b.example:shopify:catalog-b.example:product:303:variant:3001' },
     })
+  })
+
+  it('normalizes blank and null optional metadata without rejecting a page', () => {
+    const parsed = parseShopifyCollection(blankOptionalFixture)
+    const records = normalizeShopifyCollection(parsed, {
+      sourceKey: 'fixture.example/collections/sale',
+      baseUrl: 'https://fixture.example',
+    })
+
+    expect(parsed.products[0]?.product_type).toBeUndefined()
+    expect(records).toHaveLength(2)
+    expect(records[0]?.product).toMatchObject({ title: 'Fixture Relay', tags: [] })
+    expect(records[0]?.product.brand).toBeUndefined()
+    expect(records[0]?.product.productType).toBeUndefined()
+    expect(records[0]?.product.description).toBeUndefined()
+    expect(records[0]?.variant.sku).toBeUndefined()
+    expect(records[0]?.variant.barcode).toBeUndefined()
+    expect(records[0]?.listing.imageUrl).toBeUndefined()
+    expect(records[1]?.product.productType).toBeUndefined()
   })
 
   it('rejects malformed source payloads at the trust boundary', () => {

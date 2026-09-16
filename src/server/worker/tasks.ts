@@ -124,13 +124,18 @@ export async function runCatalogCollection(
       requestCount: String(result.requestCount),
       pageCount: result.status === 'not_modified' ? 0 : result.pageCount,
       productCount: result.status === 'not_modified' ? 0 : result.productCount,
+      error: result.status === 'partial' && result.incomplete?.kind === 'invalid_page'
+        ? `Page ${result.incomplete.page} failed validation: ${result.incomplete.detail}`
+        : null,
       etag: result.cache.etag,
       lastModified: result.cache.lastModified,
       completedAt: new Date(),
     }).where(eq(collectionRuns.id, payload.runId))
     await db.update(catalogSources).set({ status: 'active', updatedAt: new Date() }).where(eq(catalogSources.id, source.id))
     await log(result.status === 'partial'
-      ? `Request ceiling reached after ${result.pageCount} full pages. Saved ${result.productCount} products as a partial snapshot; more pages may exist.`
+      ? result.incomplete?.kind === 'invalid_page'
+        ? `Page ${result.incomplete.page} failed validation (${result.incomplete.detail}). Saved ${result.productCount} products from earlier pages as a partial snapshot.`
+        : `Request ceiling reached after ${result.pageCount} full pages. Saved ${result.productCount} products as a partial snapshot; more pages may exist.`
       : result.status === 'not_modified' ? 'Source reported no change.' : `Complete snapshot saved: ${result.productCount} products.`)
     helpers.logger.info(`catalog.collect: ${source.id} completed`)
   } catch (error) {

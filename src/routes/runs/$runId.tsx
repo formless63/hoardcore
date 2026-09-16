@@ -36,7 +36,7 @@ function CollectionRunPage() {
         <span className="text-sm text-muted-foreground">{run.pageCount} pages · {run.productCount} products</span>
       </div>
       {active ? <p className="mt-3 text-sm text-muted-foreground" role="status">Watching live. You can leave this page; collection continues in the background.</p> : null}
-      {run.status === 'partial' ? <p className="mt-3 rounded-lg border border-border bg-muted p-4 text-sm text-foreground">This run reached its request ceiling. The products shown were saved, but more pages may exist. Absence from this partial snapshot does not mean an item disappeared.</p> : null}
+      {run.status === 'partial' ? <p className="mt-3 rounded-lg border border-border bg-muted p-4 text-sm text-foreground">{run.error ?? 'This run reached its request ceiling.'} The products shown were saved, but more pages may exist. Absence from this partial snapshot does not mean an item disappeared.</p> : null}
       {run.status === 'failed' && run.error ? <p className="mt-3 rounded-lg border border-destructive p-4 text-sm text-destructive" role="alert">{run.error}</p> : null}
       <div className="mt-5"><Link className={buttonStyles({ variant: 'secondary' })} to="/listings">View listings</Link></div>
       <section className="mt-8" aria-label="Run log">
