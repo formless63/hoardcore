@@ -40,6 +40,7 @@ describeWithDatabase('catalog snapshot persistence and listing history', () => {
 
   it('reconciles current state, appends observations, and shares one run evidence capture', async () => {
     const first = record('one', 12)
+    first.product.imageUrls = ['https://assets.example.test/one.jpg', 'https://assets.example.test/one-alt.jpg']
     const second = record('two', 24)
     const persisted = await persistCatalogSnapshot(db(), sourceId!, [first, second], { runId, observedAt: new Date('2026-09-16T05:00:00Z'), evidence: { payload: { fixture: 'shared' }, contentType: 'application/json' } })
     await persistCatalogSnapshot(db(), sourceId!, [{ ...first, product: { ...first.product, title: 'Synthetic product one revised' }, listing: { ...first.listing, current: { ...first.listing.current, price: 15, available: false } } }], { runId, observedAt: new Date('2026-09-16T06:00:00Z') })
@@ -53,6 +54,7 @@ describeWithDatabase('catalog snapshot persistence and listing history', () => {
     const products = await db().select().from(catalogProducts).where(eq(catalogProducts.productKey, first.product.productKey))
     expect(products).toHaveLength(1)
     expect(products[0]!.title).toBe('Synthetic product one revised')
+    expect(products[0]!.imageUrls).toEqual(first.product.imageUrls)
   })
 
   it('returns listing detail with newest observation first and run-level evidence', async () => {

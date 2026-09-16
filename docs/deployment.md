@@ -34,6 +34,12 @@ For upgrades, take a backup first, then rebuild/restart the same app service. A 
 stops the app instance and leaves readiness unavailable; inspect `docker compose logs app` before
 retrying. Do not start multiple app instances against the same database during an upgrade.
 
+If shipping source with `git archive`, do not simply extract it over an older persistent source
+tree: an archive cannot remove files deleted in Git. Stale route files can override current routes.
+Extract into a fresh release directory, or reconcile the exact deleted tracked paths from the
+previous revision before rebuilding. Keep `.env` and backup storage outside that replacement
+scope. Verify the built image does not contain obsolete routes before routing traffic to it.
+
 The application listener and database listener are bound to loopback by default. Put a reviewed
 HTTPS reverse proxy or private access gateway in front of the application rather than publishing
 PostgreSQL or an unauthenticated application port directly.

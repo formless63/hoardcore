@@ -10,6 +10,7 @@ export const catalogProducts = pgTable('catalog_products', {
   brand: text('brand'),
   productType: text('product_type'),
   tags: jsonb('tags').$type<string[]>().default([]).notNull(),
+  imageUrls: jsonb('image_urls').$type<string[]>().default([]).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })

@@ -12,6 +12,7 @@ export interface NormalizedProduct {
   brand?: string
   productType?: string
   tags: string[]
+  imageUrls?: string[]
 }
 
 export interface NormalizedVariant {

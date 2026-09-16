@@ -21,6 +21,7 @@ export async function listCurrentCatalogListings(db: Database) {
     productTitle: catalogProducts.title,
     manufacturer: catalogProducts.brand,
     category: catalogProducts.productType,
+    tags: catalogProducts.tags,
     variantId: catalogVariants.id,
     variantTitle: catalogVariants.title,
     sku: catalogVariants.sku,
@@ -67,10 +68,12 @@ export async function persistCatalogSnapshot(
         brand: record.product.brand,
         productType: record.product.productType,
         tags: record.product.tags,
+        imageUrls: record.product.imageUrls ?? [],
         updatedAt: observedAt,
       }).onConflictDoUpdate({ target: catalogProducts.productKey, set: {
         title: record.product.title, description: record.product.description, brand: record.product.brand,
-        productType: record.product.productType, tags: record.product.tags, updatedAt: observedAt,
+        productType: record.product.productType, tags: record.product.tags,
+        ...(record.product.imageUrls !== undefined ? { imageUrls: record.product.imageUrls } : {}), updatedAt: observedAt,
       } }).returning({ id: catalogProducts.id })
       const [variant] = await tx.insert(catalogVariants).values({
         productId: product.id, variantKey: record.variant.variantKey, title: record.variant.title,

@@ -66,7 +66,7 @@ describe('Shopify source registration', () => {
 
     expect(records).toHaveLength(2)
     expect(records[0]).toMatchObject({
-      product: { productKey: 'shopify:catalog-a.example:product:101', title: 'Field Notebook', tags: ['paper', 'field'] },
+      product: { productKey: 'shopify:catalog-a.example:product:101', title: 'Field Notebook', tags: ['paper', 'field'], imageUrls: ['https://assets.invalid/field-notebook.jpg'] },
       variant: { variantKey: 'shopify:catalog-a.example:product:101:variant:1001', price: 12.5, available: true },
       listing: {
         listingKey: 'catalog-a.example/collections/desk:shopify:catalog-a.example:product:101:variant:1001',

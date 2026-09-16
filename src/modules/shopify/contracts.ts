@@ -79,6 +79,10 @@ export function normalizeShopifyCollection(
     // Product identity is storefront-scoped; a collection registration is only a listing scope.
     const storefrontKey = new URL(context.baseUrl).host.toLowerCase()
     const productKey = `shopify:${storefrontKey}:product:${product.id}`
+    const imageUrls = [...new Set([
+      ...(product.images ?? []).map((image) => image.src),
+      ...product.variants.map((variant) => variant.featured_image?.src),
+    ].filter((url): url is string => Boolean(url)))]
     return product.variants.map((variant) => {
       const variantKey = `${productKey}:variant:${variant.id}`
       const imageUrl = imageFor(product, variant)
@@ -95,6 +99,7 @@ export function normalizeShopifyCollection(
           tags: Array.isArray(product.tags)
             ? product.tags.map((tag) => tag.trim()).filter(Boolean)
             : (product.tags ?? '').split(',').map((tag) => tag.trim()).filter(Boolean),
+          imageUrls,
         },
         variant: {
           variantKey,

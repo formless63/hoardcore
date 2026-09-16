@@ -75,6 +75,7 @@ function packetFromSelection(
         fact('product.brand', record.product.brand, observedAt, sourceUrl),
         fact('product.type', record.product.productType, observedAt, sourceUrl),
         fact('product.tags', record.product.tags, observedAt, sourceUrl),
+        fact('product.image_urls', record.product.imageUrls, observedAt, sourceUrl),
         fact('variant.title', record.variant.title, observedAt, sourceUrl),
         fact('variant.sku', record.variant.sku, observedAt, sourceUrl),
         fact('variant.barcode', record.variant.barcode, observedAt, sourceUrl),
