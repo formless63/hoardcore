@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, lte, or } from 'drizzle-orm'
+import { and, asc, eq, gt, inArray, isNull, lte, or } from 'drizzle-orm'
 import type { Database } from '~/server/db/db.server'
 import { notificationDeliveries, notificationSettings, savedViewNotificationRules, type AlertEventType } from '~/server/db/schema/alerts'
 import { sourceEvidence, sourceListingObservations } from '~/server/db/schema/catalog'
@@ -131,5 +131,20 @@ export async function deliverQueuedNtfyNotifications(db: Database, fetcher: Ntfy
       await db.update(notificationDeliveries).set({ status: retry ? 'queued' : 'failed', attemptedAt, error: message, attemptCount: attempts, nextAttemptAt: retryAt }).where(eq(notificationDeliveries.id, delivery.id))
     }
   }
-  return { attempted: rows.length, sent, nextRetryAt }
+  // A full successful batch can still leave ready work behind, while failures
+  // leave a future retry. Re-read the queue so the worker always gets the
+  // earliest eligible wakeup rather than stranding either case.
+  const eligibleQueue = and(eq(notificationDeliveries.status, 'queued'), eq(notificationSettings.enabled, true))
+  const [readyDelivery] = await db.select({ id: notificationDeliveries.id }).from(notificationDeliveries)
+    .innerJoin(notificationSettings, eq(notificationSettings.userId, notificationDeliveries.userId))
+    .where(and(eligibleQueue, or(isNull(notificationDeliveries.nextAttemptAt), lte(notificationDeliveries.nextAttemptAt, now))))
+    .limit(1)
+  const [futureDelivery] = readyDelivery ? [] : await db.select({ nextAttemptAt: notificationDeliveries.nextAttemptAt }).from(notificationDeliveries)
+    .innerJoin(notificationSettings, eq(notificationSettings.userId, notificationDeliveries.userId))
+    .where(and(eligibleQueue, gt(notificationDeliveries.nextAttemptAt, now)))
+    .orderBy(asc(notificationDeliveries.nextAttemptAt))
+    .limit(1)
+  const nextDeliveryAt = readyDelivery ? now : futureDelivery?.nextAttemptAt ?? undefined
+
+  return { attempted: rows.length, sent, nextRetryAt, nextDeliveryAt }
 }

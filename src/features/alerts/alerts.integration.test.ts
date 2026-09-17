@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, like } from 'drizzle-orm'
 import { closeDatabase, getDatabase } from '~/server/db/index.server'
 import { catalogProducts, catalogSources, catalogVariants, collectionRuns, notificationDeliveries, notificationSettings, savedListingViews, sourceEvidence, sourceListingCurrent, sourceListingObservations, sourceListings, user, watchedListings } from '~/server/db/schema'
 import { emptyListingFilters } from '~/features/catalog/listing-filters'
@@ -90,10 +90,29 @@ describeWithDatabase('alert persistence and delivery', () => {
     expect(calls).toBeGreaterThan(0)
     expect(failed.sent).toBe(0)
     expect(failed.nextRetryAt).toBeInstanceOf(Date)
+    expect(failed.nextDeliveryAt).toEqual(failed.nextRetryAt)
     const [retry] = await db().select().from(notificationDeliveries).where(eq(notificationDeliveries.status, 'queued')).limit(1)
     expect(retry?.attemptCount).toBe(1)
     await db().update(notificationDeliveries).set({ nextAttemptAt: new Date(0) }).where(eq(notificationDeliveries.status, 'queued'))
     const succeeded = await deliverQueuedNtfyNotifications(db(), async (url, init) => { expect(url).toMatch(/^https:\/\/ntfy\.example\.test\//); expect(init.redirect).toBe('manual'); return { ok: true, status: 200, text: async () => '' } })
     expect(succeeded.sent).toBeGreaterThan(0)
+  })
+
+  it('schedules an immediate continuation when more than 20 deliveries are ready', async () => {
+    const prefix = `alerts-batch-${suffix}`
+    await db().insert(notificationDeliveries).values(Array.from({ length: 21 }, (_, index) => ({
+      userId: firstUserId, listingId, kind: 'watch', eventType: 'price_change' as const, dedupeKey: `${prefix}-${index}`,
+      payload: { title: 'Batch alert', body: 'Queued delivery' }, status: 'queued' as const,
+    })))
+
+    const firstBatch = await deliverQueuedNtfyNotifications(db(), async () => ({ ok: true, status: 200, text: async () => '' }))
+    expect(firstBatch).toMatchObject({ attempted: 20, sent: 20 })
+    expect(firstBatch.nextDeliveryAt).toBeInstanceOf(Date)
+    const remaining = await db().select({ id: notificationDeliveries.id }).from(notificationDeliveries)
+      .where(and(like(notificationDeliveries.dedupeKey, `${prefix}%`), eq(notificationDeliveries.status, 'queued')))
+    expect(remaining).toHaveLength(1)
+
+    const secondBatch = await deliverQueuedNtfyNotifications(db(), async () => ({ ok: true, status: 200, text: async () => '' }))
+    expect(secondBatch).toMatchObject({ attempted: 1, sent: 1, nextDeliveryAt: undefined })
   })
 })
