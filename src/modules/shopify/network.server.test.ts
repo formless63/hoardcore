@@ -21,6 +21,9 @@ describe('secure Shopify transport', () => {
       resolver: async () => [{ address: '93.184.216.34', family: 4 }],
       request: async (options) => {
         options.lookup!('shop.example.test', {}, (_error, address) => { connectedAddress = String(address) })
+        options.lookup!('shop.example.test', { all: true }, (_error, addresses) => {
+          expect(addresses).toEqual([{ address: '93.184.216.34', family: 4 }])
+        })
         expect(options).toMatchObject({ hostname: 'shop.example.test', servername: 'shop.example.test', port: 443, path: '/products.json?limit=250' })
         return new Response('{"products":[]}')
       },

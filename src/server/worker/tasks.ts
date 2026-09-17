@@ -51,14 +51,14 @@ export function createRobotsAccessPolicy(
   run: ShopifyCollectionRun,
   http: ShopifyHttpClient = createSecureShopifyHttpClient(),
   userAgent = 'Hoardcore/0.1 (conservative catalog collector)',
-  onRequest?: (requestCount: number, status?: number) => Promise<void> | void,
+  onRequest?: (requestCount: number, status?: number, failureCode?: string) => Promise<void> | void,
 ) {
   const cache = new Map<string, ReturnType<typeof robotsParser>>()
   return async (url: string): Promise<boolean> => {
     const origin = new URL(url).origin
     const cached = cache.get(origin)
     if (cached !== undefined) return cached.isAllowed(url, userAgent) === true
-    if (run.requests >= run.maxRequests) return false
+    if (run.requests >= run.maxRequests) throw new ShopifyCollectionTransportError('Collection request ceiling reached', 'request_ceiling')
     run.requests += 1
     try {
       await onRequest?.(run.requests)
@@ -68,12 +68,15 @@ export function createRobotsAccessPolicy(
         signal: AbortSignal.timeout(5000),
       })
       await onRequest?.(run.requests, response.status)
-      if (response.status < 200 || response.status >= 300) return false
+      if (response.status < 200 || response.status >= 300) throw new Error(`robots.txt returned HTTP ${response.status}`)
       const parser = robotsParser(`${origin}/robots.txt`, await new Response(response.body).text())
       cache.set(origin, parser)
       return parser.isAllowed(url, userAgent) === true
-    } catch {
-      return false
+    } catch (error) {
+      const code = error instanceof Error && 'code' in error && typeof error.code === 'string'
+        ? error.code : 'POLICY_UNAVAILABLE'
+      await onRequest?.(run.requests, undefined, code)
+      throw error
     }
   }
 }
@@ -122,8 +125,9 @@ export async function runCatalogCollection(
     }
     await log('Collection started. Checking source access policy.')
     const http = dependencies.http ?? createSecureShopifyHttpClient({ resolver: dependencies.resolver, request: dependencies.request })
-    const accessPolicy = dependencies.accessPolicy ?? createRobotsAccessPolicy(run, http, policy.userAgent, async (requestCount, status) => {
-      await log(status === undefined ? 'Checking robots.txt.' : `robots.txt responded with HTTP ${status}.`, requestCount)
+    const accessPolicy = dependencies.accessPolicy ?? createRobotsAccessPolicy(run, http, policy.userAgent, async (requestCount, status, failureCode) => {
+      await log(failureCode ? `robots.txt check failed (${failureCode}); collection stopped.`
+        : status === undefined ? 'Checking robots.txt.' : `robots.txt responded with HTTP ${status}.`, requestCount)
     })
     const catalogUrl = policy.catalogUrl
   // A first-page validator cannot prove a previously paginated collection is

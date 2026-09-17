@@ -32,6 +32,9 @@ describe('secure ntfy transport', () => {
       resolver: async () => [{ address: '93.184.216.34', family: 4 }],
       request: async (options) => {
         options.lookup!('ntfy.example.test', {}, (_error, address) => { connectedAddress = String(address) })
+        options.lookup!('ntfy.example.test', { all: true }, (_error, addresses) => {
+          expect(addresses).toEqual([{ address: '93.184.216.34', family: 4 }])
+        })
         expect(options).toMatchObject({ hostname: 'ntfy.example.test', servername: 'ntfy.example.test', port: 443, path: '/topic' })
         return { ok: false, status: 302, text: async () => '' }
       },

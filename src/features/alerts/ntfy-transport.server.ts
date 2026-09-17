@@ -1,8 +1,8 @@
 import { lookup as lookupDns } from 'node:dns/promises'
 import type { LookupAddress } from 'node:dns'
 import { request as httpsRequest, type RequestOptions } from 'node:https'
-import type { LookupFunction } from 'node:net'
 import { isPublicNtfyAddress } from './ntfy-network'
+import { createPinnedLookup } from '~/lib/pinned-lookup'
 
 export interface NtfyFetchResponse { ok: boolean; status: number; text(): Promise<string> }
 export type NtfyFetch = (input: string, init: RequestInit) => Promise<NtfyFetchResponse>
@@ -42,10 +42,9 @@ export async function secureNtfyFetch(input: string, init: RequestInit, dependen
   const body = typeof init.body === 'string' ? init.body : ''
   if (init.body !== undefined && typeof init.body !== 'string') throw new Error('ntfy delivery body must be text')
   const pinned = await resolvePublicNtfyAddress(url.hostname, dependencies.resolver)
-  const lookup: LookupFunction = (_hostname, _options, callback) => callback(null, pinned.address, pinned.family)
   const headers = Object.fromEntries(new Headers(init.headers).entries())
   return (dependencies.request ?? requestPinnedNtfy)({
     protocol: 'https:', hostname: url.hostname, servername: url.hostname, port: 443,
-    path: `${url.pathname}${url.search}`, method: init.method ?? 'POST', headers, lookup, signal: init.signal ?? undefined,
+    path: `${url.pathname}${url.search}`, method: init.method ?? 'POST', headers, lookup: createPinnedLookup(pinned), signal: init.signal ?? undefined,
   }, body)
 }

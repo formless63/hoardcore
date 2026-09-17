@@ -1,10 +1,10 @@
 import { lookup as lookupDns } from 'node:dns/promises'
 import type { LookupAddress } from 'node:dns'
 import { request as httpsRequest, type RequestOptions } from 'node:https'
-import type { LookupFunction } from 'node:net'
 import { Readable } from 'node:stream'
 import type { ShopifyHttpClient, ShopifyHttpResponse } from './transport'
 import { isPublicShopifyAddress } from './network'
+import { createPinnedLookup } from '~/lib/pinned-lookup'
 
 export type ShopifyResolver = (hostname: string) => Promise<LookupAddress[]>
 export type ShopifyPinnedRequest = (options: RequestOptions) => Promise<ShopifyHttpResponse>
@@ -47,11 +47,10 @@ export function createSecureShopifyHttpClient(dependencies: { resolver?: Shopify
       throw new Error('Shopify source request must use credential-free HTTPS on port 443')
     }
     const pinned = await resolvePublicShopifyAddress(url.hostname, dependencies.resolver)
-    const lookup: LookupFunction = (_hostname, _options, callback) => callback(null, pinned.address, pinned.family)
     return (dependencies.request ?? requestPinnedShopify)({
       protocol: 'https:', hostname: url.hostname, servername: url.hostname, port: 443,
       path: `${url.pathname}${url.search}`, method: 'GET', headers: init.headers,
-      lookup, signal: init.signal,
+      lookup: createPinnedLookup(pinned), signal: init.signal,
     })
   }
 }

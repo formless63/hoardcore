@@ -17,7 +17,7 @@ describe('embedded worker task registry', () => {
     expect(info).toHaveBeenCalledWith('fixture.echo: retained payload')
   })
 
-  it('fails closed for unavailable/ambiguous robots and caches an allowed policy per origin', async () => {
+  it('fails closed for unavailable robots and caches an allowed policy per origin', async () => {
     const run = createShopifyCollectionRun(3)
     const http = vi.fn().mockResolvedValue(new Response('User-agent: *\nDisallow:\n'))
     const policy = createRobotsAccessPolicy(run, http)
@@ -27,14 +27,16 @@ describe('embedded worker task registry', () => {
 
     const denied = createRobotsAccessPolicy(createShopifyCollectionRun(), vi.fn().mockResolvedValue(new Response('User-agent: *\nDisallow: /\n')))
     await expect(denied('https://blocked.invalid/products.json')).resolves.toBe(false)
-    const unavailable = createRobotsAccessPolicy(createShopifyCollectionRun(), vi.fn().mockRejectedValue(new Error('offline')))
-    await expect(unavailable('https://unknown.invalid/products.json')).resolves.toBe(false)
+    const diagnostics = vi.fn()
+    const unavailable = createRobotsAccessPolicy(createShopifyCollectionRun(), vi.fn().mockRejectedValue(Object.assign(new Error('offline'), { code: 'ECONNRESET' })), undefined, diagnostics)
+    await expect(unavailable('https://unknown.invalid/products.json')).rejects.toThrow('offline')
+    expect(diagnostics).toHaveBeenLastCalledWith(1, undefined, 'ECONNRESET')
   })
 
   it('rejects robots redirects without following them', async () => {
     const http = vi.fn().mockResolvedValue(new Response(null, { status: 302, headers: { location: 'https://internal.invalid/' } }))
     const policy = createRobotsAccessPolicy(createShopifyCollectionRun(2), http)
-    await expect(policy('https://synthetic.invalid/products.json')).resolves.toBe(false)
+    await expect(policy('https://synthetic.invalid/products.json')).rejects.toThrow('robots.txt returned HTTP 302')
     expect(http).toHaveBeenCalledWith('https://synthetic.invalid/robots.txt', expect.objectContaining({ redirect: 'error' }))
   })
 
