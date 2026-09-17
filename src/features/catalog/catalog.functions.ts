@@ -5,11 +5,9 @@ import { getDatabase } from '~/server/db/index.server'
 import { listCurrentCatalogListings } from '~/server/db/catalog-persistence.server'
 import { currentListingsResponseSchema } from './catalog.schemas'
 import { z } from 'zod'
-import { inArray, desc, eq } from 'drizzle-orm'
-import { catalogProducts, catalogVariants, sourceEvidence, sourceListingCurrent, sourceListingObservations, sourceListings } from '~/server/db/schema/catalog'
-import { catalogSources } from '~/server/db/schema/catalog-sources'
 import { createResearchBatchExport } from '~/features/research/research.batch'
 import { persistResearchBatchExport } from '~/features/research/research.server'
+import { loadResearchExportRows } from '~/server/db/catalog-research-export.server'
 
 export const listCurrentListings = createServerFn({ method: 'GET' }).handler(async () => {
   await requireSession()
@@ -23,12 +21,8 @@ export const createResearchExport = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const session = await requireSession()
     setResponseHeader('Cache-Control', 'private, no-store')
-    const rows = await getDatabase().select({ listing: sourceListings, current: sourceListingCurrent, product: catalogProducts, variant: catalogVariants, source: catalogSources, evidence: sourceEvidence })
-      .from(sourceListings).innerJoin(sourceListingCurrent, eq(sourceListingCurrent.listingId, sourceListings.id)).innerJoin(catalogProducts, eq(catalogProducts.id, sourceListings.productId)).innerJoin(catalogVariants, eq(catalogVariants.id, sourceListings.variantId)).innerJoin(catalogSources, eq(catalogSources.id, sourceListings.sourceId)).leftJoin(sourceListingObservations, eq(sourceListingObservations.listingId, sourceListings.id)).leftJoin(sourceEvidence, eq(sourceEvidence.id, sourceListingObservations.evidenceId)).where(inArray(sourceListings.id, data.listingIds)).orderBy(desc(sourceListingObservations.observedAt))
-    const latest = new Map<string, typeof rows[number]>()
-    for (const row of rows) if (!latest.has(row.listing.id)) latest.set(row.listing.id, row)
-    if (latest.size !== data.listingIds.length) throw new Error('One or more selected listings are unavailable')
-    const records = [...latest.values()].map((row) => ({
+    const rows = await loadResearchExportRows(getDatabase(), data.listingIds)
+    const records = rows.map((row) => ({
       product: {
         productKey: row.product.id, title: row.product.title, description: row.product.description ?? undefined,
         brand: row.product.brand ?? undefined, productType: row.product.productType ?? undefined,
@@ -51,7 +45,7 @@ export const createResearchExport = createServerFn({ method: 'POST' })
         },
         observedAt: row.current.observedAt.toISOString(),
       },
-      evidenceId: row.evidence?.id,
+      evidenceId: row.evidenceId ?? undefined,
     }))
     const exported = createResearchBatchExport(records)
     // Route preloading may request a draft packet. Only an explicit export or
