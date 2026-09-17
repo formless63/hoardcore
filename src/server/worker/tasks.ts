@@ -1,8 +1,8 @@
 import type { JobHelpers, Task, TaskList } from 'graphile-worker'
-import { and, desc, eq, inArray, lte, isNotNull } from 'drizzle-orm'
+import { and, desc, eq, inArray, lte, isNotNull, isNull, or } from 'drizzle-orm'
 import { getDatabase } from '../db/index.server'
 import { catalogSources } from '../db/schema/catalog-sources'
-import { collectionRunEvents, collectionRuns } from '../db/schema/catalog'
+import { collectionRunEvents, collectionRuns, type JsonValue } from '../db/schema/catalog'
 import { persistCatalogSnapshot } from '../db/catalog-persistence.server'
 import { createShopifyCollectionRun, ShopifyCollectionTransportError, type ShopifyCollectionRun, type ShopifyHttpClient } from '../../modules/shopify/transport'
 import { createSecureShopifyHttpClient, type ShopifyPinnedRequest, type ShopifyResolver } from '../../modules/shopify/network.server'
@@ -45,6 +45,10 @@ export interface CatalogCollectionTaskDependencies {
   request?: ShopifyPinnedRequest
   collectionEnabled?: boolean
   mediaEnabled?: boolean
+}
+
+class CollectionPagePause extends Error {
+  constructor(readonly until: Date) { super('Collection deferred between pages') }
 }
 
 export function createRobotsAccessPolicy(
@@ -100,13 +104,17 @@ export async function runCatalogCollection(
   const [priorRun] = await db.select().from(collectionRuns).where(and(inArray(collectionRuns.status, ['succeeded', 'not_modified']), eq(collectionRuns.sourceId, source.id))).orderBy(desc(collectionRuns.completedAt)).limit(1)
   // A locked job from before a restart may wake after startup recovery has
   // marked its run terminal. Never revive it or issue another source request.
-  const [runRecord] = await db.update(collectionRuns).set({ status: 'running', startedAt: new Date() })
-    .where(and(eq(collectionRuns.id, payload.runId), eq(collectionRuns.status, 'queued'))).returning()
+  const [runRecord] = await db.update(collectionRuns).set({ status: 'running', startedAt: new Date(), nextAllowedAt: null })
+    .where(and(eq(collectionRuns.id, payload.runId), eq(collectionRuns.status, 'queued'),
+      or(isNull(collectionRuns.nextAllowedAt), lte(collectionRuns.nextAllowedAt, new Date())),
+      or(isNull(collectionRuns.minimumAllowedAt), lte(collectionRuns.minimumAllowedAt, new Date())),
+      or(isNull(collectionRuns.retryAfterUntil), lte(collectionRuns.retryAfterUntil, new Date())))).returning()
   if (!runRecord) {
     helpers.logger.info(`catalog.collect: ${payload.runId} skipped because its run is no longer queued`)
     return
   }
   const run = dependencies.run ?? createShopifyCollectionRun(runRecord.requestLimit)
+  run.requests = Number(runRecord.requestCount)
   async function log(message: string, requestCount = run.requests) {
     await db.insert(collectionRunEvents).values({ runId: payload.runId, message })
     await db.update(collectionRuns).set({ requestCount: String(requestCount) }).where(eq(collectionRuns.id, payload.runId))
@@ -137,17 +145,40 @@ export async function runCatalogCollection(
   const initialCache = priorRun && priorRun.pageCount <= 1
     ? { etag: priorRun.etag ?? undefined, lastModified: priorRun.lastModified ?? undefined }
     : undefined
-    const observedAt = new Date()
+    const observedAt = runRecord.observedAt ?? new Date()
+    if (!runRecord.observedAt) await db.update(collectionRuns).set({ observedAt }).where(eq(collectionRuns.id, payload.runId))
     const result = await collectShopifySnapshot({
       catalogUrl,
       sourceKey: source.sourceKey,
+      currency: persistedPolicy.currency,
       cache: initialCache,
       policy,
       http,
       accessPolicy,
       run,
       observedAt: observedAt.toISOString(),
+      checkpoint: { pages: runRecord.evidencePages, firstPageCache: { etag: runRecord.etag ?? undefined, lastModified: runRecord.lastModified ?? undefined } },
+      onPageCheckpoint: async (checkpoint) => {
+        const minimumAllowedAt = new Date(Date.now() + policy.minimumDelayMs)
+        const nextAllowedAt = new Date(Date.now() + Math.max(policy.minimumDelayMs, runRecord.interPageWaitMs))
+        await db.update(collectionRuns).set({
+          evidencePages: checkpoint.pages as JsonValue[],
+          nextPage: checkpoint.page + 1,
+          pageCount: checkpoint.page,
+          productCount: checkpoint.productCount,
+          requestCount: String(run.requests),
+          etag: checkpoint.firstPageCache.etag,
+          lastModified: checkpoint.firstPageCache.lastModified,
+          minimumAllowedAt,
+        }).where(eq(collectionRuns.id, payload.runId))
+        if (checkpoint.productCount > 0 && checkpoint.productCount % 250 === 0 && nextAllowedAt.getTime() - Date.now() > 30_000) {
+          throw new CollectionPagePause(nextAllowedAt)
+        }
+      },
       onEvent: async (event) => {
+        if (event.type === 'request_started') {
+          await db.update(collectionRuns).set({ minimumAllowedAt: new Date(Date.now() + policy.minimumDelayMs) }).where(eq(collectionRuns.id, payload.runId))
+        }
         await log(event.type === 'request_started'
           ? `Request ${event.requestCount} of ${run.maxRequests}: fetching catalog page ${event.page}.`
           : `Catalog page ${event.page} responded with HTTP ${event.status}.`, event.requestCount)
@@ -184,6 +215,10 @@ export async function runCatalogCollection(
       etag: result.cache.etag,
       lastModified: result.cache.lastModified,
       completedAt: new Date(),
+      evidencePages: [],
+      nextAllowedAt: null,
+      minimumAllowedAt: null,
+      retryAfterUntil: null,
     }).where(eq(collectionRuns.id, payload.runId))
     await db.update(catalogSources).set({ status: 'active', updatedAt: new Date() }).where(eq(catalogSources.id, source.id))
     await log(result.status === 'partial'
@@ -204,14 +239,38 @@ export async function runCatalogCollection(
     helpers.logger.info(`catalog.collect: ${source.id} completed`)
   } catch (error) {
     const requestCount = run.requests
-    if (error instanceof ShopifyCollectionTransportError && error.kind === 'retry_after' && error.retryAfterMs !== undefined && helpers.addJob) {
-      const retryAt = new Date(Date.now() + error.retryAfterMs)
+    if (error instanceof CollectionPagePause && helpers.addJob) {
+      await helpers.addJob('catalog.collect', payload, { runAt: error.until, maxAttempts: 1, jobKey: `catalog-resume-${payload.runId}` })
+      await db.update(collectionRuns).set({ status: 'queued', requestCount: String(requestCount), nextAllowedAt: error.until, error: `Waiting between pages until ${error.until.toISOString()}.` }).where(eq(collectionRuns.id, payload.runId))
+      await log(`Page checkpoint saved; continuation scheduled for ${error.until.toISOString()}. Minimum pacing remains in force.`, requestCount)
+      return
+    }
+    if (error instanceof ShopifyCollectionTransportError && error.kind === 'deferred_backoff' && error.retryAfterMs !== undefined && helpers.addJob) {
+      const [current] = await db.select({ minimumAllowedAt: collectionRuns.minimumAllowedAt }).from(collectionRuns).where(eq(collectionRuns.id, payload.runId))
+      const resumeAt = new Date(Math.max(Date.now() + error.retryAfterMs, current?.minimumAllowedAt?.getTime() ?? 0))
       try {
-        await helpers.addJob('catalog.collect', payload, { runAt: retryAt, maxAttempts: 1 })
+        await helpers.addJob('catalog.collect', payload, { runAt: resumeAt, maxAttempts: 1, jobKey: `catalog-resume-${payload.runId}` })
+        await db.update(collectionRuns).set({ status: 'queued', requestCount: String(requestCount), nextAllowedAt: resumeAt,
+          error: `Transient source response; discretionary backoff until ${resumeAt.toISOString()}.`, completedAt: null })
+          .where(eq(collectionRuns.id, payload.runId))
+        await log(`Transient source response; continuation deferred until ${resumeAt.toISOString()}.`, requestCount)
+        return
+      } catch (deferError) {
+        helpers.logger.info(`catalog.collect: ${source.id} could not defer transient backoff: ${String(deferError)}`)
+      }
+    }
+    if (error instanceof ShopifyCollectionTransportError && error.kind === 'retry_after' && error.retryAfterMs !== undefined && helpers.addJob) {
+      const sourceRetryAt = new Date(Date.now() + error.retryAfterMs)
+      const [current] = await db.select({ minimumAllowedAt: collectionRuns.minimumAllowedAt }).from(collectionRuns).where(eq(collectionRuns.id, payload.runId))
+      const retryAt = new Date(Math.max(sourceRetryAt.getTime(), current?.minimumAllowedAt?.getTime() ?? 0))
+      try {
+        await helpers.addJob('catalog.collect', payload, { runAt: retryAt, maxAttempts: 1, jobKey: `catalog-resume-${payload.runId}` })
         await db.update(collectionRuns).set({
           status: 'queued', requestCount: String(requestCount),
           error: `Deferred until ${retryAt.toISOString()} after source Retry-After.`,
           completedAt: null,
+          nextAllowedAt: retryAt,
+          retryAfterUntil: sourceRetryAt,
         }).where(eq(collectionRuns.id, payload.runId))
         await db.update(catalogSources).set({ status: 'active', updatedAt: new Date() }).where(eq(catalogSources.id, source.id))
         await log(`Source requested Retry-After; collection deferred until ${retryAt.toISOString()}.`, requestCount)

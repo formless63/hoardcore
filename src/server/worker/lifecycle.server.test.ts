@@ -66,6 +66,26 @@ describe('embedded worker lifecycle', () => {
     expect(permanentlyFailJobs).not.toHaveBeenCalled()
   })
 
+  it('requeues a checkpointed running run from its next page after restart', async () => {
+    const id = 'f08a1193-1f17-4c9d-9fc6-9d4706afc1a4'
+    const sourceId = '4ae76b7d-784e-4796-883b-1e17788b8ac0'
+    const until = new Date(Date.now() + 60_000)
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ id, sourceId, nextPage: 2, nextAllowedAt: until }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'old-job' }] })
+      .mockResolvedValue({ rows: [] })
+    const permanentlyFailJobs = vi.fn().mockResolvedValue([])
+    const addJob = vi.fn().mockResolvedValue({})
+
+    await expect(recoverInterruptedCollectionRuns({ query } as never, { permanentlyFailJobs, addJob } as never)).resolves.toBe(1)
+    expect(permanentlyFailJobs).toHaveBeenCalledWith(['old-job'], expect.any(String))
+    expect(addJob).toHaveBeenCalledWith('catalog.collect', { sourceId, runId: id }, expect.objectContaining({
+      jobKey: `catalog-resume-${id}`, runAt: until, maxAttempts: 1,
+    }))
+    expect(query.mock.calls[2]?.[0]).toContain("status = 'queued'")
+    expect(query.mock.calls[2]?.[1]).toEqual([[id]])
+  })
+
   it('preserves queued runs with jobs but releases queued runs stranded without one', async () => {
     const kept = 'f08a1193-1f17-4c9d-9fc6-9d4706afc1a4'
     const orphaned = '4ae76b7d-784e-4796-883b-1e17788b8ac0'

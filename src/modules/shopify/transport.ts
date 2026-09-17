@@ -64,7 +64,7 @@ export interface ShopifyCollectionFetchResult {
 export class ShopifyCollectionTransportError extends Error {
   constructor(
     message: string,
-    readonly kind: 'request_ceiling' | 'persistent_rejection' | 'retry_exhausted' | 'invalid_response' | 'redirect_rejected' | 'response_too_large' | 'timeout' | 'retry_after',
+    readonly kind: 'request_ceiling' | 'persistent_rejection' | 'retry_exhausted' | 'invalid_response' | 'redirect_rejected' | 'response_too_large' | 'timeout' | 'retry_after' | 'deferred_backoff',
     readonly status?: number,
     readonly retryAfterMs?: number,
   ) {
@@ -228,6 +228,12 @@ export async function fetchShopifyCollectionPage(
         )
       }
       const delay = sourceRetryAfterMs ?? backoffBaseMs * 2 ** attempt
+      if (sourceRetryAfterMs === undefined && delay > maxInlineRetryAfterMs) {
+        throw new ShopifyCollectionTransportError(
+          `Transient source response (${response.status}); collection deferred for ${delay}ms before another attempt`,
+          'deferred_backoff', response.status, delay,
+        )
+      }
       attempt += 1
       await sleep(delay)
       continue

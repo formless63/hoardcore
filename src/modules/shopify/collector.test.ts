@@ -25,6 +25,21 @@ function response(payload: unknown, headers: Record<string, string> = {}): Shopi
 }
 
 describe('Shopify collection snapshot orchestration', () => {
+  it('resumes from a durable page checkpoint without refetching completed pages or resetting the request budget', async () => {
+    const firstPage = { products: Array.from({ length: 250 }, (_, index) => product(index + 1)) }
+    const secondPage = { products: [product(251)] }
+    const http = vi.fn().mockResolvedValue(response(secondPage))
+    const run = createShopifyCollectionRun(3)
+    run.requests = 1
+    const result = await collectShopifySnapshot({
+      catalogUrl: 'https://store.invalid/collections/sale', sourceKey: 'store.invalid/collections/sale',
+      policy, http, accessPolicy: async () => true, sleep: async () => {}, run,
+      checkpoint: { pages: [firstPage], firstPageCache: { etag: '"page-one"' } },
+    })
+    expect(result).toMatchObject({ status: 'ok', pageCount: 2, productCount: 251, requestCount: 2 })
+    expect(http).toHaveBeenCalledOnce()
+    expect(http.mock.calls[0]?.[0]).toContain('page=2')
+  })
   it('merges sequential pages and retains first-page cache metadata', async () => {
     const firstPage = { products: Array.from({ length: 250 }, (_, index) => product(index + 1)) }
     const secondPage = { products: [product(251)] }

@@ -30,6 +30,7 @@ export function SourceRunControl({ sourceId, run, defaultRequestLimit = 3, disab
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [requestLimit, setRequestLimit] = useState(defaultRequestLimit)
+  const [interPageWaitMinutes, setInterPageWaitMinutes] = useState(1)
 
   useEffect(() => {
     if (run?.status !== 'queued' && run?.status !== 'running') return
@@ -43,7 +44,7 @@ export function SourceRunControl({ sourceId, run, defaultRequestLimit = 3, disab
     if (busy) return
     setBusy(true); setError(null)
     try {
-      const next = await runCollection({ data: { sourceId, requestLimit } })
+      const next = await runCollection({ data: { sourceId, requestLimit, interPageWaitMs: interPageWaitMinutes * 60_000 } })
       if (watch) await navigate({ to: '/runs/$runId', params: { runId: next.id } })
       else await router.invalidate({ sync: true })
     }
@@ -56,10 +57,13 @@ export function SourceRunControl({ sourceId, run, defaultRequestLimit = 3, disab
     <label className="flex items-center gap-2 text-xs text-muted-foreground">Request ceiling
       <Input className="h-8 w-20" type="number" min={2} max={20} step={1} value={requestLimit} onChange={(event) => setRequestLimit(Number(event.target.value))} />
     </label>
-    <p className="max-w-60 text-right text-xs text-muted-foreground">Includes the access-policy check. Requests are spaced at least one second apart. Incomplete collections are saved as partial.</p>
+    <label className="flex items-center gap-2 text-xs text-muted-foreground">Wait between full pages (minutes)
+      <Input className="h-8 w-20" type="number" min={0} max={5} step={1} value={interPageWaitMinutes} onChange={(event) => setInterPageWaitMinutes(Number(event.target.value))} />
+    </label>
+    <p className="max-w-60 text-right text-xs text-muted-foreground">0 disables the optional wait; 1–5 minutes keeps long pauses durable. Continue sooner may shorten only this optional wait, never minimum pacing or source Retry-After. The request ceiling includes the access-policy check.</p>
     <div className="flex flex-wrap justify-end gap-2">
-      <Button disabled={disabled || busy || requestLimit < 2 || requestLimit > 20 || !Number.isInteger(requestLimit) || run?.status === 'queued' || run?.status === 'running'} size="small" variant="secondary" onClick={() => void start(false)}>{busy ? 'Starting…' : 'Run in background'}</Button>
-      <Button disabled={disabled || busy || requestLimit < 2 || requestLimit > 20 || !Number.isInteger(requestLimit) || run?.status === 'queued' || run?.status === 'running'} size="small" onClick={() => void start(true)}>Run &amp; watch</Button>
+      <Button disabled={disabled || busy || requestLimit < 2 || requestLimit > 20 || !Number.isInteger(requestLimit) || !Number.isInteger(interPageWaitMinutes) || interPageWaitMinutes < 0 || interPageWaitMinutes > 5 || run?.status === 'queued' || run?.status === 'running'} size="small" variant="secondary" onClick={() => void start(false)}>{busy ? 'Starting…' : 'Run in background'}</Button>
+      <Button disabled={disabled || busy || requestLimit < 2 || requestLimit > 20 || !Number.isInteger(requestLimit) || !Number.isInteger(interPageWaitMinutes) || interPageWaitMinutes < 0 || interPageWaitMinutes > 5 || run?.status === 'queued' || run?.status === 'running'} size="small" onClick={() => void start(true)}>Run &amp; watch</Button>
     </div>
     {(run?.status === 'failed' || run?.status === 'partial') && run.error ? <p className="max-w-xs text-right text-xs text-destructive" role="alert">{run.error}</p> : null}
     {error ? <p className="max-w-xs text-right text-xs text-destructive" role="alert">{error}</p> : null}

@@ -18,6 +18,54 @@ describe.skipIf(!testDatabaseUrl)('catalog collection worker safety', () => {
 
   afterAll(async () => { await closeDatabase() })
 
+  it('persists a resumed checkpoint as one snapshot without repeating page one', async () => {
+    const normalized = normalizeShopifyCatalogUrl(`https://fixture-${crypto.randomUUID()}.invalid/collections/sale`)
+    const [source] = await getDatabase().insert(catalogSources).values({
+      moduleId: 'shopify', displayName: 'Resumed fixture', sourceKey: normalized.sourceKey, config: normalized.config,
+    }).returning({ id: catalogSources.id })
+    sourceId = source.id
+    const firstPage = { products: Array.from({ length: 250 }, (_, index) => ({
+      id: index + 1, title: `Product ${index + 1}`, handle: `product-${index + 1}`,
+      variants: [{ id: (index + 1) * 10, price: '10.00', available: true }],
+    })) }
+    const [run] = await getDatabase().insert(collectionRuns).values({
+      sourceId, requestLimit: 3, requestCount: '1', pageCount: 1, productCount: 250,
+      nextPage: 2, evidencePages: [firstPage], observedAt: new Date('2026-09-17T00:00:00Z'),
+    }).returning({ id: collectionRuns.id })
+    const http = vi.fn().mockResolvedValue({ status: 200, headers: {}, json: async () => ({ products: [] }) })
+    await runCatalogCollection({ sourceId, runId: run.id }, { logger: { info: vi.fn() } }, {
+      collectionEnabled: true, accessPolicy: async () => true, http,
+    })
+    const [recorded] = await getDatabase().select().from(collectionRuns).where(eq(collectionRuns.id, run.id))
+    expect(recorded).toMatchObject({ status: 'succeeded', requestCount: '2', pageCount: 2, productCount: 250 })
+    expect(http).toHaveBeenCalledOnce()
+    expect(http.mock.calls[0]?.[0]).toContain('page=2')
+  })
+
+  it('checkpoints a full page and queues the configured discretionary inter-page wait', async () => {
+    const normalized = normalizeShopifyCatalogUrl(`https://fixture-${crypto.randomUUID()}.invalid/collections/sale`)
+    const [source] = await getDatabase().insert(catalogSources).values({
+      moduleId: 'shopify', displayName: 'Wait fixture', sourceKey: normalized.sourceKey, config: normalized.config,
+    }).returning({ id: catalogSources.id })
+    sourceId = source.id
+    const [run] = await getDatabase().insert(collectionRuns).values({ sourceId, requestLimit: 3, interPageWaitMs: 60_000 }).returning({ id: collectionRuns.id })
+    const firstPage = { products: Array.from({ length: 250 }, (_, index) => ({
+      id: index + 1, title: `Product ${index + 1}`, handle: `product-${index + 1}`,
+      variants: [{ id: (index + 1) * 10, price: '10.00', available: true }],
+    })) }
+    const http = vi.fn().mockResolvedValue({ status: 200, headers: {}, json: async () => firstPage })
+    const addJob = vi.fn().mockResolvedValue({})
+    await runCatalogCollection({ sourceId, runId: run.id }, { logger: { info: vi.fn() }, addJob }, {
+      collectionEnabled: true, accessPolicy: async () => true, http,
+    })
+    const [recorded] = await getDatabase().select().from(collectionRuns).where(eq(collectionRuns.id, run.id))
+    expect(recorded).toMatchObject({ status: 'queued', nextPage: 2, pageCount: 1, productCount: 250, requestCount: '1' })
+    expect(recorded?.evidencePages).toHaveLength(1)
+    expect(recorded?.nextAllowedAt?.getTime()).toBeGreaterThan(recorded?.minimumAllowedAt?.getTime() ?? 0)
+    expect(addJob).toHaveBeenCalledWith('catalog.collect', { sourceId, runId: run.id }, expect.objectContaining({ runAt: expect.any(Date), maxAttempts: 1 }))
+    expect(http).toHaveBeenCalledOnce()
+  })
+
   it('records a source rejection without throwing for Graphile to retry', async () => {
     const normalized = normalizeShopifyCatalogUrl(`https://fixture-${crypto.randomUUID()}.invalid/collections/sale`)
     const [source] = await getDatabase().insert(catalogSources).values({

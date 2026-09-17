@@ -2,6 +2,8 @@ import { boolean, index, integer, jsonb, numeric, pgEnum, pgTable, primaryKey, s
 import { sql } from 'drizzle-orm'
 import { catalogSources } from './catalog-sources'
 
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
+
 export const catalogProducts = pgTable('catalog_products', {
   id: uuid('id').defaultRandom().primaryKey(),
   productKey: text('product_key').notNull().unique(),
@@ -37,9 +39,16 @@ export const collectionRuns = pgTable('collection_runs', {
   sourceId: uuid('source_id').notNull().references(() => catalogSources.id, { onDelete: 'cascade' }),
   status: collectionRunStatus('status').notNull().default('queued'),
   requestLimit: integer('request_limit').notNull().default(3),
+  interPageWaitMs: integer('inter_page_wait_ms').notNull().default(0),
   requestCount: numeric('request_count', { precision: 10, scale: 0 }).notNull().default('0'),
   pageCount: integer('page_count').notNull().default(0),
   productCount: integer('product_count').notNull().default(0),
+  nextPage: integer('next_page').notNull().default(1),
+  evidencePages: jsonb('evidence_pages').$type<JsonValue[]>().default([]).notNull(),
+  observedAt: timestamp('observed_at', { withTimezone: true }),
+  nextAllowedAt: timestamp('next_allowed_at', { withTimezone: true }),
+  minimumAllowedAt: timestamp('minimum_allowed_at', { withTimezone: true }),
+  retryAfterUntil: timestamp('retry_after_until', { withTimezone: true }),
   error: text('error'),
   etag: text('etag'),
   lastModified: text('last_modified'),

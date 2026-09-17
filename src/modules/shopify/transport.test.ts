@@ -60,6 +60,16 @@ describe('Shopify collection transport', () => {
     expect(http).toHaveBeenCalledTimes(1)
   })
 
+  it('defers a long discretionary transient backoff without sleeping in the worker', async () => {
+    const sleep = vi.fn()
+    const http = vi.fn().mockResolvedValue(response(503))
+    await expect(fetchShopifyCollectionPage('https://store.invalid', 1, undefined, {
+      http, minimumDelayMs: 0, backoffBaseMs: 60_000, sleep,
+    })).rejects.toMatchObject({ kind: 'deferred_backoff', status: 503, retryAfterMs: 60_000 })
+    expect(http).toHaveBeenCalledOnce()
+    expect(sleep).not.toHaveBeenCalled()
+  })
+
   it('rejects redirects and oversized response bodies before parsing', async () => {
     await expect(fetchShopifyCollectionPage('https://store.invalid', 1, undefined, {
       http: async () => response(302), sleep: async () => {},

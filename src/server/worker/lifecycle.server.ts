@@ -81,7 +81,8 @@ async function startWorkerInternal(runtime: WorkerRuntimeState, pool: Pool): Pro
   runtime.status = { state: 'ready' }
 }
 
-const interruptedRunMessage = 'Collection interrupted by an application restart before completion; it was not retried automatically.'
+const interruptedRunMessage = 'Collection interrupted by an application restart before a page checkpoint; it was not retried automatically.'
+const resumedRunMessage = 'Collection resumed after an application restart from its last validated page checkpoint.'
 const interruptedJobMessage = 'Collection run was interrupted by an application restart and was not retried automatically.'
 const orphanedQueuedRunMessage = 'Queued collection had no durable job after an application restart; it was not retried automatically.'
 
@@ -97,10 +98,11 @@ const orphanedQueuedRunMessage = 'Queued collection had no durable job after an 
  */
 export async function recoverInterruptedCollectionRuns(
   pool: Pick<Pool, 'query'>,
-  workerUtils: Pick<WorkerUtils, 'permanentlyFailJobs'>,
+  workerUtils: Pick<WorkerUtils, 'permanentlyFailJobs' | 'addJob'>,
 ): Promise<number> {
-  const active = await pool.query<{ id: string }>(`
-    select id::text as id
+  const active = await pool.query<{ id: string; sourceId: string; nextPage: number; nextAllowedAt: Date | null; minimumAllowedAt: Date | null; retryAfterUntil: Date | null }>(`
+    select id::text as id, source_id::text as "sourceId", next_page as "nextPage", next_allowed_at as "nextAllowedAt",
+           minimum_allowed_at as "minimumAllowedAt", retry_after_until as "retryAfterUntil"
     from collection_runs
     where status = 'running'
   `)
@@ -120,6 +122,25 @@ export async function recoverInterruptedCollectionRuns(
     await workerUtils.permanentlyFailJobs(jobs.rows.map((job) => job.id), interruptedJobMessage)
   }
 
+  const resumable = active.rows.filter((row) => row.nextPage > 1)
+  for (const row of resumable) {
+    await workerUtils.addJob('catalog.collect', { sourceId: row.sourceId, runId: row.id }, {
+      jobKey: `catalog-resume-${row.id}`, maxAttempts: 1,
+      runAt: new Date(Math.max(Date.now(), row.nextAllowedAt?.getTime() ?? 0, row.minimumAllowedAt?.getTime() ?? 0, row.retryAfterUntil?.getTime() ?? 0)),
+    })
+  }
+  if (resumable.length) {
+    await pool.query(`
+      update collection_runs set status = 'queued', error = null
+      where id = any($1::uuid[]) and status = 'running' and next_page > 1
+    `, [resumable.map((row) => row.id)])
+    await pool.query(`
+      insert into collection_run_events (run_id, message)
+      select unnest($1::uuid[]), $2
+    `, [resumable.map((row) => row.id), resumedRunMessage])
+  }
+  const interruptedIds = active.rows.filter((row) => !(row.nextPage > 1)).map((row) => row.id)
+  if (!interruptedIds.length) return runIds.length
   await pool.query(`
     update collection_runs
     set status = 'failed',
@@ -127,11 +148,11 @@ export async function recoverInterruptedCollectionRuns(
         completed_at = now()
     where id = any($2::uuid[])
       and status = 'running'
-  `, [interruptedRunMessage, runIds])
+  `, [interruptedRunMessage, interruptedIds])
   await pool.query(`
     insert into collection_run_events (run_id, message)
     select unnest($1::uuid[]), $2
-  `, [runIds, interruptedRunMessage])
+  `, [interruptedIds, interruptedRunMessage])
   return runIds.length
 }
 

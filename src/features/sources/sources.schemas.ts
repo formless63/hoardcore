@@ -18,6 +18,8 @@ export const createCatalogSourceInputSchema = z.object({
 })
 
 export const manualCollectionRequestLimitSchema = z.number().int().min(2).max(20)
+export const interPageWaitMsSchema = z.number().int().refine((value) => value === 0 || (value >= 60_000 && value <= 300_000),
+  'Inter-page wait must be off or between one and five minutes')
 
 export const catalogSourceSummarySchema = z.object({
   id: z.string(),
