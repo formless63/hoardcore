@@ -21,7 +21,8 @@ system. Before tagging:
    source pause/schedule behavior, catalog run logs, listings/detail navigation, media access,
    research import/API, and opt-in alerts on an approved installation.
 4. Document known limits honestly: a source may expose availability without a numeric quantity;
-   partial collections do not prove a listing is missing; opportunity/ROI workflow is still planned.
+   partial collections do not prove a listing is missing; the detail-page margin calculator is an
+   unsaved estimate, and a durable opportunity/purchase workflow is still planned.
 5. Update `package.json` to `0.1.0`, write release notes describing included migrations and
    upgrade/backup steps, then create an annotated `v0.1.0` tag on the accepted commit.
 

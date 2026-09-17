@@ -25,8 +25,11 @@ Operator acceptance of each deployment remains important.
 - Per-source collection enable/pause and opt-in daily, three-day, or weekly schedules. New sources
   default to manual-only; the deployment-wide collection gate still applies.
 - Current listings tracker with source/product/variant detail, observation history, and retained
-  evidence. The overview shows inventory totals, source health, activity, and observed price/stock
-  changes. Numeric stock quantity is shown only when a source actually provides it.
+  evidence. The listings workbench has URL-persisted filters/sort, saved views, and source-specific
+  category-group corrections. Listing detail includes bounded, paginated observation history,
+  price/stock trends, private review decisions, and a local estimate-only margin calculator. The
+  overview shows inventory totals, source health, activity, and observed price/stock changes.
+  Numeric stock quantity is shown only when a source actually provides it.
 - Versioned research packet export, validated preview/import, immutable raw submissions,
   manual comparable entry, and a scoped bearer-token API for coding agents.
 - Opt-in photo capture that automatically queues paced, bounded follow-up batches after collection,

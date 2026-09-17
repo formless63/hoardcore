@@ -97,8 +97,10 @@ host; do not put installation-specific hostnames or network names in the public 
 - `/api/ready` checks PostgreSQL and embedded worker readiness.
 
 Only route traffic to an instance returning readiness. After a restart, verify readiness and inspect
-the collection-run history for queued, succeeded, and failed jobs. Durable jobs remain in
-PostgreSQL and are retried by the embedded worker according to Graphile Worker behavior.
+the collection-run history for queued, succeeded, and failed jobs. Queued jobs, including future
+`Retry-After` work, remain in PostgreSQL. An interrupted *running* collection is marked failed for
+operator review rather than silently issuing source requests again; a queued run with no matching
+durable job is also failed so it cannot block future runs.
 
 ## PostgreSQL backup and restore
 
