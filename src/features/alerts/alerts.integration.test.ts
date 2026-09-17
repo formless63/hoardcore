@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { and, eq, inArray, like } from 'drizzle-orm'
+import { and, eq, inArray, like, sql } from 'drizzle-orm'
 import { closeDatabase, getDatabase } from '~/server/db/index.server'
 import { catalogProducts, catalogSources, catalogVariants, collectionRuns, notificationDeliveries, notificationSettings, savedListingViews, sourceEvidence, sourceListingCurrent, sourceListingObservations, sourceListings, user, watchedListings } from '~/server/db/schema'
 import { emptyListingFilters } from '~/features/catalog/listing-filters'
@@ -15,6 +15,7 @@ describeWithDatabase('alert persistence and delivery', () => {
   const secondUserId = `alerts-b-${suffix}`
   let sourceId = ''
   let productId = ''
+  let otherProductId = ''
   let listingId = ''
   let savedViewId = ''
   let priceViewId = ''
@@ -54,7 +55,8 @@ describeWithDatabase('alert persistence and delivery', () => {
 
   afterAll(async () => {
     if (sourceId) await db().delete(catalogSources).where(eq(catalogSources.id, sourceId))
-    if (productId) await db().delete(catalogProducts).where(eq(catalogProducts.id, productId))
+    const productIds = [productId, otherProductId].filter(Boolean)
+    if (productIds.length) await db().delete(catalogProducts).where(inArray(catalogProducts.id, productIds))
     await db().delete(user).where(inArray(user.id, [firstUserId, secondUserId]))
     await closeDatabase()
   })
@@ -82,6 +84,31 @@ describeWithDatabase('alert persistence and delivery', () => {
     expect(await queueAlertsForCollectionRun(db(), { runId: availability.runId, listingIds: [listingId] })).toEqual({ events: 2, queued: 2 })
     const availabilityRows = await db().select().from(notificationDeliveries).where(and(eq(notificationDeliveries.listingId, listingId), eq(notificationDeliveries.eventType, 'availability_change')))
     expect(availabilityRows.map((row) => row.userId).sort()).toEqual([firstUserId, secondUserId].sort())
+  })
+
+  it('evaluates only listings explicitly persisted for the requested run payload', async () => {
+    const otherProductKey = `alerts-other-product-${suffix}`
+    const [otherProduct] = await db().insert(catalogProducts).values({ productKey: otherProductKey, title: 'Other alert item', tags: [] }).returning({ id: catalogProducts.id })
+    otherProductId = otherProduct.id
+    const [otherVariant] = await db().insert(catalogVariants).values({ productId: otherProduct.id, variantKey: `alerts-other-variant-${suffix}`, title: 'Default Title' }).returning({ id: catalogVariants.id })
+    const [otherListing] = await db().insert(sourceListings).values({ sourceId, productId: otherProduct.id, variantId: otherVariant.id, listingKey: `alerts-other-listing-${suffix}`, url: 'https://catalog.example.test/other-alert-item' }).returning({ id: sourceListings.id })
+    const observedAt = new Date(Date.now() + 10_000)
+    const [run] = await db().insert(collectionRuns).values({ sourceId, status: 'succeeded', requestLimit: 3, completedAt: observedAt }).returning({ id: collectionRuns.id })
+    const [evidence] = await db().insert(sourceEvidence).values({ sourceId, runId: run.id, capturedAt: observedAt, payload: { test: true } }).returning({ id: sourceEvidence.id })
+    await db().insert(sourceListingObservations).values([
+      { listingId, observedAt, title: 'Alert test item', price: '70.00', currency: 'USD', available: true, evidenceId: evidence.id },
+      { listingId: otherListing.id, observedAt, title: 'Other alert item', price: '50.00', currency: 'USD', available: true, evidenceId: evidence.id },
+    ])
+    await db().insert(sourceListingCurrent).values([
+      { listingId, observedAt, title: 'Alert test item', price: '70.00', currency: 'USD', available: true },
+      { listingId: otherListing.id, observedAt, title: 'Other alert item', price: '50.00', currency: 'USD', available: true },
+    ]).onConflictDoUpdate({ target: sourceListingCurrent.listingId, set: { observedAt, title: sql`excluded.title`, price: sql`excluded.price`, currency: sql`excluded.currency`, available: sql`excluded.available` } })
+
+    const result = await queueAlertsForCollectionRun(db(), { runId: run.id, listingIds: [listingId] })
+
+    expect(result.events).toBeGreaterThan(0)
+    const otherDeliveries = await db().select({ id: notificationDeliveries.id }).from(notificationDeliveries).where(eq(notificationDeliveries.listingId, otherListing.id))
+    expect(otherDeliveries).toHaveLength(0)
   })
 
   it('uses a mock ntfy transport and retries a failed send without external network access', async () => {
