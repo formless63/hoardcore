@@ -15,8 +15,8 @@ function parsed(value: unknown): ResearchResult | undefined {
 }
 
 export function ResearchHistoryPanel({ history }: { history: ResearchHistoryItem[] }) {
-  if (!history.length) return <section className="border-t border-border pt-3"><h2 className="text-sm font-medium">Research history</h2><p className="mt-1 text-xs text-muted-foreground">No imported research or notes recorded.</p></section>
-  return <section className="border-t border-border pt-3" aria-label="Research history">
+  if (!history.length) return <section id="research-history" className="border-t border-border pt-3"><h2 className="text-sm font-medium">Research history</h2><p className="mt-1 text-xs text-muted-foreground">No imported research or notes recorded.</p></section>
+  return <section id="research-history" className="border-t border-border pt-3" aria-label="Research history">
     <div className="flex items-baseline justify-between gap-2"><h2 className="text-sm font-medium">Research history</h2><span className="text-xs text-muted-foreground">{history.length} submission{history.length === 1 ? '' : 's'}</span></div>
     <div className="mt-2 space-y-2">{history.map((item) => {
       const result = parsed(item.normalizedPayload)
