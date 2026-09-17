@@ -47,7 +47,7 @@ describeWithDatabase('alert persistence and delivery', () => {
     const [view] = await db().insert(savedListingViews).values({ userId: secondUserId, name: `Alert view ${suffix}`, filters: emptyListingFilters }).returning({ id: savedListingViews.id })
     savedViewId = view.id
     await saveSavedViewAlertPreference(db(), secondUserId, savedViewId, true, ['availability_change'])
-    const [priceView] = await db().insert(savedListingViews).values({ userId: secondUserId, name: `Price entry ${suffix}`, filters: { ...emptyListingFilters, maxPrice: 90 } }).returning({ id: savedListingViews.id })
+    const [priceView] = await db().insert(savedListingViews).values({ userId: secondUserId, name: `Price entry ${suffix}`, filters: { ...emptyListingFilters, currency: 'USD', maxPrice: 90 } }).returning({ id: savedListingViews.id })
     priceViewId = priceView.id
     await saveSavedViewAlertPreference(db(), secondUserId, priceViewId, true, ['new_match'])
     await db().insert(notificationSettings).values({ userId: firstUserId, enabled: true, endpoint: 'https://ntfy.example.test', topic: 'first-user-topic' })

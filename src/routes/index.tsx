@@ -17,7 +17,8 @@ export const Route = createFileRoute('/')({
 
 function money(amount: number | null, currency: string | null) {
   if (amount === null) return '—'
-  try { return new Intl.NumberFormat('en', { style: 'currency', currency: currency ?? 'USD', maximumFractionDigits: 2 }).format(amount) }
+  if (!currency) return amount.toFixed(2)
+  try { return new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 2 }).format(amount) }
   catch { return amount.toFixed(2) }
 }
 
@@ -46,12 +47,14 @@ function Overview() {
       </div>
     </div>
 
-    <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="Inventory totals">
+    <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5" aria-label="Inventory totals">
       <Stat label="Tracked listings" value={data.totals.tracked} detail={`Across ${data.sources.length} sources`} />
       <Stat label="In stock" value={data.totals.inStock} detail={percent(data.totals.inStock, data.totals.tracked) + ' of tracked'} tone="positive" />
       <Stat label="Out of stock" value={data.totals.outOfStock} detail={percent(data.totals.outOfStock, data.totals.tracked) + ' of tracked'} tone="negative" />
       <Stat label="Changed recently" value={data.changeTotal} detail={`${data.newlyOutOfStockTotal} newly out of stock`} />
+      <Stat label="Missing" value={data.totals.missing} detail="From complete snapshots" tone="negative" />
     </section>
+    {data.presenceChanges.length ? <section className="rounded-lg border border-border bg-card p-3" aria-labelledby="presence-heading"><h2 className="text-sm font-semibold" id="presence-heading">Presence changes</h2><ul className="mt-2 divide-y divide-border">{data.presenceChanges.slice(0, 8).map((item) => <li key={`${item.id}-${item.kind}`} className="flex items-center justify-between gap-3 py-1.5 text-xs"><ItemLink item={item} /><span className={item.kind === 'missing' ? 'text-rose-500' : 'text-emerald-500'}>{item.kind === 'missing' ? 'Missing' : 'Reappeared'} · {shortDate(item.at)}</span></li>)}</ul></section> : null}
 
     <div className="grid gap-3 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,1fr)]">
       <section className="rounded-lg border border-border bg-card p-3" aria-labelledby="source-health-heading">

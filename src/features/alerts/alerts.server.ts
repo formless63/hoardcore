@@ -133,7 +133,7 @@ async function listCurrentListingsForAlertEvaluation(db: Database, listingIds: r
       categoryGroupOverride: sourceCategoryGroupOverrides.categoryGroup, tags: catalogProducts.tags,
       variantId: catalogVariants.id, variantTitle: catalogVariants.title, sku: catalogVariants.sku, imageUrl: sourceListings.imageUrl,
       title: sourceListingCurrent.title, price: sourceListingCurrent.price, compareAtPrice: sourceListingCurrent.compareAtPrice,
-      currency: sourceListingCurrent.currency, available: sourceListingCurrent.available, stockQuantity: sourceListingCurrent.stockQuantity,
+      currency: sourceListingCurrent.currency, available: sourceListingCurrent.available, presence: sourceListingCurrent.presence, stockQuantity: sourceListingCurrent.stockQuantity,
       observedAt: sourceListingCurrent.observedAt,
     }).from(sourceListingCurrent)
       .innerJoin(sourceListings, eq(sourceListings.id, sourceListingCurrent.listingId))

@@ -34,6 +34,7 @@ export const sourceCategoryGroupOverrides = pgTable('source_category_group_overr
 ])
 
 export const collectionRunStatus = pgEnum('collection_run_status', ['queued', 'running', 'succeeded', 'partial', 'not_modified', 'failed'])
+export const sourceListingPresenceStatus = pgEnum('source_listing_presence_status', ['present', 'missing'])
 export const collectionRuns = pgTable('collection_runs', {
   id: uuid('id').defaultRandom().primaryKey(),
   sourceId: uuid('source_id').notNull().references(() => catalogSources.id, { onDelete: 'cascade' }),
@@ -45,6 +46,7 @@ export const collectionRuns = pgTable('collection_runs', {
   productCount: integer('product_count').notNull().default(0),
   nextPage: integer('next_page').notNull().default(1),
   evidencePages: jsonb('evidence_pages').$type<JsonValue[]>().default([]).notNull(),
+  supplementPages: jsonb('supplement_pages').$type<JsonValue[]>().default([]).notNull(),
   observedAt: timestamp('observed_at', { withTimezone: true }),
   nextAllowedAt: timestamp('next_allowed_at', { withTimezone: true }),
   minimumAllowedAt: timestamp('minimum_allowed_at', { withTimezone: true }),
@@ -94,6 +96,13 @@ export const sourceListingCurrent = pgTable('source_listing_current', {
   compareAtPrice: numeric('compare_at_price', { precision: 14, scale: 2 }),
   currency: text('currency'),
   available: boolean('available').notNull(),
+  presence: sourceListingPresenceStatus('presence').notNull().default('present'),
+  firstSeenAt: timestamp('first_seen_at', { withTimezone: true }),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+  missingSince: timestamp('missing_since', { withTimezone: true }),
+  missingRunId: uuid('missing_run_id').references(() => collectionRuns.id, { onDelete: 'set null' }),
+  reappearedAt: timestamp('reappeared_at', { withTimezone: true }),
+  reappearedRunId: uuid('reappeared_run_id').references(() => collectionRuns.id, { onDelete: 'set null' }),
   stockQuantity: integer('stock_quantity'),
   observedAt: timestamp('observed_at', { withTimezone: true }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

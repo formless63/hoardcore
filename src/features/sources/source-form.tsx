@@ -41,6 +41,8 @@ export function SourceForm() {
     defaultValues: {
       displayName: '',
       catalogUrl: '',
+      currency: '',
+      stockCardsEnabled: false,
     },
     onSubmit: async ({ value }) => {
       setSubmissionError(null)
@@ -50,7 +52,7 @@ export function SourceForm() {
           data: {
             displayName: value.displayName,
             moduleId: 'shopify',
-            config: { catalogUrl: value.catalogUrl },
+            config: { catalogUrl: value.catalogUrl, ...(value.currency.trim() ? { currency: value.currency } : {}), stockCardsEnabled: value.stockCardsEnabled },
           },
         })
         await router.invalidate({ sync: true })
@@ -131,6 +133,21 @@ export function SourceForm() {
         </form.Field>
 
         <form.Field
+          name="currency"
+          validators={{ onChange: ({ value }) => value.trim() && !/^[A-Za-z]{3}$/.test(value.trim()) ? 'Use a three-letter currency code.' : undefined }}
+        >
+          {(field) => {
+            const error = field.state.meta.isTouched ? field.state.meta.errors[0] : undefined
+            return <div>
+              <label className="text-sm font-medium text-card-foreground" htmlFor={field.name}>Currency (optional)</label>
+              <p className="mt-1 text-sm text-muted-foreground">Declare the storefront currency when known. Leave blank to preserve unknown currency.</p>
+              <Input autoCapitalize="characters" aria-invalid={Boolean(error)} className="mt-2 uppercase" id={field.name} maxLength={3} name={field.name} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} placeholder="USD" value={field.state.value} />
+              {error ? <p className="mt-2 text-sm text-destructive">{String(error)}</p> : null}
+            </div>
+          }}
+        </form.Field>
+
+        <form.Field
           name="catalogUrl"
           validators={{
             onChange: ({ value }) => validateCatalogUrl(value),
@@ -173,6 +190,13 @@ export function SourceForm() {
               </div>
             )
           }}
+        </form.Field>
+
+        <form.Field name="stockCardsEnabled">
+          {(field) => <label className="flex items-start gap-3 text-sm text-foreground">
+            <input className="mt-1" type="checkbox" checked={field.state.value} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.checked)} />
+            <span>Supplement stock counts from public collection cards when catalog JSON omits them. This makes extra paced collection-page requests, counts against the run ceiling, and never visits individual product pages.</span>
+          </label>}
         </form.Field>
 
         {submissionError ? (

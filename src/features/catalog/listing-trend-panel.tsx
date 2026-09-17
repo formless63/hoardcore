@@ -16,8 +16,9 @@ export function ListingTrends({ detail }: { detail: ListingDetail }) {
   const prices = listingTrendPoints(detail.observations, 'price').map((point) => point.value)
   const quantities = listingTrendPoints(detail.observations, 'stockQuantity').map((point) => point.value)
   if (!prices.length && !quantities.length) return null
-  const currency = detail.current.currency ?? 'USD'
+  const currency = detail.current.currency
   const money = (value: number) => {
+    if (!currency) return value.toFixed(2)
     try { return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(value) }
     catch { return value.toFixed(2) }
   }

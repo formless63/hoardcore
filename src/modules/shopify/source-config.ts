@@ -1,12 +1,13 @@
 import type { NormalizedSourceConfig } from '../types'
 import { isIpLiteral, isPublicShopifyAddress } from './network'
+import { normalizeCurrency } from '../../lib/currency'
 
 export const shopifyCollectionPolicyDefaults = {
   minimumDelayMs: 1000, maxRequests: 3, maxRetries: 2, backoffBaseMs: 1000,
   userAgent: 'Hoardcore/0.1 (conservative catalog collector)',
 } as const
 
-export function normalizeShopifyCatalogUrl(value: string): NormalizedSourceConfig {
+export function normalizeShopifyCatalogUrl(value: string, currency?: unknown): NormalizedSourceConfig {
   const trimmedValue = value.trim()
 
   if (!trimmedValue) {
@@ -55,8 +56,9 @@ export function normalizeShopifyCatalogUrl(value: string): NormalizedSourceConfi
   const host = url.host.toLowerCase()
   const catalogUrl = scopePath ? `https://${host}${scopePath}` : `https://${host}/`
 
+  const normalizedCurrency = normalizeCurrency(currency)
   return {
-    config: { catalogUrl, ...shopifyCollectionPolicyDefaults },
+    config: { catalogUrl, ...(normalizedCurrency ? { currency: normalizedCurrency } : {}), ...shopifyCollectionPolicyDefaults },
     sourceKey: `${host}${scopePath}`,
     summary: `${host}${scopePath}`,
   }

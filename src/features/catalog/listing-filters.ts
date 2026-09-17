@@ -4,6 +4,8 @@ import { categoryGroups, unmappedCategoryGroup } from './category-groups'
 
 const amount = z.number().finite().nonnegative().max(1_000_000_000).nullable()
 const percent = z.number().finite().min(0).max(100).nullable()
+const currency = z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, 'Use a three-letter currency code.').or(z.literal('')).default('')
+const presence = z.enum(['all', 'present', 'missing']).default('present')
 
 /** Versioned independently of the UI so future alert jobs can use the same rules. */
 export const listingFiltersSchema = z.object({
@@ -14,6 +16,8 @@ export const listingFiltersSchema = z.object({
   manufacturer: z.string().max(200),
   sourceId: z.string().max(100),
   stock: z.enum(['all', 'in', 'out']),
+  presence,
+  currency,
   minPrice: amount,
   maxPrice: amount,
   minDiscountAmount: amount,
@@ -32,7 +36,8 @@ export const listingFiltersSchema = z.object({
 
 export type ListingFilters = z.output<typeof listingFiltersSchema>
 export const emptyListingFilters: ListingFilters = {
-  version: 1, query: '', categoryGroup: '', category: '', manufacturer: '', sourceId: '', stock: 'all',
+  version: 1, query: '', categoryGroup: '', category: '', manufacturer: '', sourceId: '', stock: 'all', presence: 'present',
+  currency: '',
   minPrice: null, maxPrice: null, minDiscountAmount: null, maxDiscountAmount: null,
   minDiscountPercent: null, maxDiscountPercent: null,
 }
@@ -52,6 +57,13 @@ export function matchesListingFilters(listing: CurrentListing, filters: ListingF
   if (filters.manufacturer && listing.manufacturer !== filters.manufacturer) return false
   if (filters.sourceId && listing.sourceId !== filters.sourceId) return false
   if (filters.stock !== 'all' && listing.available !== (filters.stock === 'in')) return false
+  if (filters.presence !== 'all' && listing.presence !== filters.presence) return false
+  if (filters.currency && listing.currency !== filters.currency) return false
+  const hasAbsoluteAmountFilter = filters.minPrice !== null || filters.maxPrice !== null || filters.minDiscountAmount !== null || filters.maxDiscountAmount !== null
+  // An amount without an explicit currency cannot be compared safely across
+  // sources. Keep legacy saved views readable, but make them match nothing
+  // until the operator selects a currency.
+  if (hasAbsoluteAmountFilter && !filters.currency) return false
   if (filters.minPrice !== null || filters.maxPrice !== null) {
     if (listing.price === null) return false
     const price = Number(listing.price)

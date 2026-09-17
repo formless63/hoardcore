@@ -98,9 +98,11 @@ host; do not put installation-specific hostnames or network names in the public 
 
 Only route traffic to an instance returning readiness. After a restart, verify readiness and inspect
 the collection-run history for queued, succeeded, and failed jobs. Queued jobs, including future
-`Retry-After` work, remain in PostgreSQL. An interrupted *running* collection is marked failed for
-operator review rather than silently issuing source requests again; a queued run with no matching
-durable job is also failed so it cannot block future runs.
+`Retry-After` work, remain in PostgreSQL. A running collection with a saved page checkpoint is
+requeued from its next page; an interrupted run without a checkpoint is marked failed for operator
+review. A queued run with no matching durable job is also failed so it cannot block future runs.
+An in-flight request may be repeated if the process exits after receiving its response but before
+the page checkpoint commits. Request counts and finite ceilings remain durable.
 
 ## PostgreSQL backup and restore
 
@@ -169,6 +171,14 @@ blocks both manual and scheduled runs. The deployment-wide `CATALOG_COLLECTION_E
 gate remains authoritative even if a schedule is saved. The in-process worker checks due sources
 once per minute, but does not send source requests for manual-only or paused sources. A scheduled
 run never overrides the normal access checks, pacing, request ceiling, or active-run limit.
+
+Manual runs can add an optional 1–5 minute inter-page wait with a live countdown. The **Continue
+sooner** control skips only that discretionary wait; it cannot skip minimum pacing, `Retry-After`,
+or an access-policy denial. A Shopify source may opt into collection-card stock counts when its
+catalog JSON omits them. This adds a paced HTML request for each catalog page, using the same
+finite run budget, robots checks, and rejection handling. Increase the request ceiling deliberately
+for that mode; it never requests every product page. A complete snapshot alone can mark previously
+seen listings missing. Partial, failed, and not-modified runs do not imply absence.
 
 Hoardcore does not rotate proxies or identities, bypass CAPTCHAs, spoof browser fingerprints, or
 otherwise evade source controls. Keep fetch, parse, normalize, and persistence stages testable from

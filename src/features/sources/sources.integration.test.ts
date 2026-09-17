@@ -1,10 +1,11 @@
 import { afterAll, afterEach, describe, expect, it } from 'vitest'
 import { inArray } from 'drizzle-orm'
 import { closeDatabase, getDatabase } from '~/server/db/index.server'
-import { catalogSources } from '~/server/db/schema'
+import { catalogSources, collectionRuns } from '~/server/db/schema'
 import {
   createCatalogSourceInDatabase,
   listCatalogSourcesFromDatabase,
+  updateSourceCatalogOptionsInDatabase,
   updateSourceScheduleInDatabase,
 } from './sources.server'
 
@@ -78,5 +79,21 @@ describeWithDatabase('catalog source persistence', () => {
     expect(scheduled.nextRunAt).not.toBeNull()
     const paused = await updateSourceScheduleInDatabase({ sourceId: created.id, collectionEnabled: false, scheduleHours: 72, scheduleRequestLimit: 10 })
     expect(paused).toMatchObject({ collectionEnabled: false, nextRunAt: null })
+  })
+
+  it('updates existing catalog options without losing other config and blocks edits during a run', async () => {
+    const host = `example-${crypto.randomUUID()}.myshopify.com`
+    const created = await createCatalogSourceInDatabase({ displayName: 'Editable source', moduleId: 'shopify', config: { catalogUrl: `https://${host}/collections/sale` } })
+    createdSourceIds.push(created.id)
+    const [stored] = await getDatabase().select().from(catalogSources).where(inArray(catalogSources.id, [created.id]))
+    await getDatabase().update(catalogSources).set({ config: { ...stored!.config, futureSetting: 'preserve' } }).where(inArray(catalogSources.id, [created.id]))
+
+    const updated = await updateSourceCatalogOptionsInDatabase({ sourceId: created.id, currency: 'USD', stockCardsEnabled: true })
+    expect(updated).toMatchObject({ currency: 'USD', stockCardsEnabled: true, scheduleHours: null })
+    const [configured] = await getDatabase().select({ config: catalogSources.config }).from(catalogSources).where(inArray(catalogSources.id, [created.id]))
+    expect(configured?.config).toMatchObject({ currency: 'USD', stockCardsEnabled: true, futureSetting: 'preserve' })
+
+    await getDatabase().insert(collectionRuns).values({ sourceId: created.id, status: 'queued' })
+    await expect(updateSourceCatalogOptionsInDatabase({ sourceId: created.id, currency: '', stockCardsEnabled: false })).rejects.toThrow('active collection')
   })
 })

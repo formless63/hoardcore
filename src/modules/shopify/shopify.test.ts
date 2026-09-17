@@ -7,6 +7,13 @@ import malformedFixture from './fixtures/collection-malformed.json'
 import { normalizeShopifyCollection, parseShopifyCollection } from './contracts'
 
 describe('Shopify source registration', () => {
+  it('keeps stock-card HTML collection opt-in and scoped to the registered source', () => {
+    const disabled = shopifyModule.sourceRegistration.normalize({ catalogUrl: 'store.invalid' })
+    const enabled = shopifyModule.sourceRegistration.normalize({ catalogUrl: 'store.invalid', stockCardsEnabled: true })
+    expect(disabled.config).not.toHaveProperty('stockCardsEnabled')
+    expect(enabled.config).toHaveProperty('stockCardsEnabled', true)
+    expect(shopifyModule.sourceRegistration.read(enabled.config).config).toHaveProperty('stockCardsEnabled', true)
+  })
   it('accepts a bare hostname and normalizes it to an HTTPS origin', () => {
     expect(shopifyModule.sourceRegistration.normalize({ catalogUrl: 'Example.myshopify.com' }))
       .toEqual({
@@ -103,6 +110,19 @@ describe('Shopify source registration', () => {
     expect(record.listing.current.compareAtPrice).toBe(18)
     expect(record.listing.current.available).toBe(true)
     expect(record.listing.current.stockQuantity).toBeUndefined()
+  })
+
+  it('propagates only an operator-declared currency', () => {
+    const [declared] = normalizeShopifyCollection(parseShopifyCollection(validFixture), {
+      sourceKey: 'catalog-a.example/collections/desk', baseUrl: 'https://catalog-a.example', currency: 'CAD',
+    })
+    const [unknown] = normalizeShopifyCollection(parseShopifyCollection(validFixture), {
+      sourceKey: 'catalog-a.example/collections/desk', baseUrl: 'https://catalog-a.example',
+    })
+    expect(declared?.variant.currency).toBe('CAD')
+    expect(declared?.listing.current.currency).toBe('CAD')
+    expect(unknown?.variant.currency).toBeUndefined()
+    expect(unknown?.listing.current.currency).toBeUndefined()
   })
 
   it('preserves an explicit quantity when a Shopify response supplies one', () => {

@@ -32,6 +32,8 @@ export const catalogSourceSummarySchema = z.object({
   scheduleRequestLimit: manualCollectionRequestLimitSchema,
   nextRunAt: z.string().nullable(),
   summary: z.string(),
+  currency: z.string().nullable(),
+  stockCardsEnabled: z.boolean(),
   createdAt: z.string(),
 })
 
@@ -46,3 +48,6 @@ export const updateSourceScheduleSchema = z.object({
   scheduleRequestLimit: manualCollectionRequestLimitSchema,
 })
 export type UpdateSourceScheduleInput = z.infer<typeof updateSourceScheduleSchema>
+
+export const updateSourceCatalogOptionsSchema = z.object({ sourceId: z.uuid(), currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).or(z.literal('')), stockCardsEnabled: z.boolean() })
+export type UpdateSourceCatalogOptionsInput = z.infer<typeof updateSourceCatalogOptionsSchema>

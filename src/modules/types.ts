@@ -23,6 +23,7 @@ export interface NormalizedVariant {
   barcode?: string
   price?: number
   compareAtPrice?: number
+  /** Operator-declared source currency; absent means unknown, never an inferred USD. */
   currency?: string
   available: boolean
   imageUrl?: string
@@ -39,6 +40,7 @@ export interface NormalizedSourceListing {
     title: string
     price?: number
     compareAtPrice?: number
+    /** Operator-declared source currency; absent means unknown. */
     currency?: string
     available: boolean
     /** Source-reported count, when supplied; absence is not zero. */

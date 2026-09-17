@@ -12,6 +12,8 @@ export interface CatalogObservationInput {
   observedAt?: Date
   evidence?: { payload: unknown; contentType?: string; sha256?: string }
   runId?: string
+  /** Only a complete successful snapshot may reconcile omitted listings as missing. */
+  complete?: boolean
 }
 
 export async function listCurrentCatalogListings(db: Database) {
@@ -37,6 +39,7 @@ export async function listCurrentCatalogListings(db: Database) {
     currency: sourceListingCurrent.currency,
     available: sourceListingCurrent.available,
     stockQuantity: sourceListingCurrent.stockQuantity,
+    presence: sourceListingCurrent.presence,
     observedAt: sourceListingCurrent.observedAt,
   }).from(sourceListingCurrent)
     .innerJoin(sourceListings, eq(sourceListings.id, sourceListingCurrent.listingId))
@@ -46,7 +49,7 @@ export async function listCurrentCatalogListings(db: Database) {
     .leftJoin(sourceCategoryGroupOverrides, and(
       eq(sourceCategoryGroupOverrides.sourceId, sourceListings.sourceId),
       eq(sourceCategoryGroupOverrides.sourceCategory, catalogProducts.productType),
-    ))
+    )).where(eq(sourceListingCurrent.presence, 'present'))
   const captures = await getListingMediaCaptures(db, listings.map((listing) => listing.id))
   return listings.map(({ categoryGroupOverride, ...listing }) => ({
     ...listing,
@@ -64,7 +67,7 @@ function currentListingSelect() {
     categoryGroupOverride: sourceCategoryGroupOverrides.categoryGroup, tags: catalogProducts.tags, variantId: catalogVariants.id, variantTitle: catalogVariants.title,
     sku: catalogVariants.sku, imageUrl: sourceListings.imageUrl, title: sourceListingCurrent.title, price: sourceListingCurrent.price,
     compareAtPrice: sourceListingCurrent.compareAtPrice, currency: sourceListingCurrent.currency, available: sourceListingCurrent.available,
-    stockQuantity: sourceListingCurrent.stockQuantity, observedAt: sourceListingCurrent.observedAt,
+    stockQuantity: sourceListingCurrent.stockQuantity, presence: sourceListingCurrent.presence, observedAt: sourceListingCurrent.observedAt,
   }
 }
 
@@ -82,6 +85,7 @@ async function categoryGroupFilter(db: Database, categoryGroup: string): Promise
 
 function listingFilterConditions(filters: ListingFilters, categoryGroup: SQL | undefined): SQL[] {
   const conditions: SQL[] = []
+  if (filters.presence !== 'all') conditions.push(eq(sourceListingCurrent.presence, filters.presence))
   if (categoryGroup) conditions.push(categoryGroup)
   if (filters.query) {
     // `includes` in the former client-side implementation treated these as
@@ -94,6 +98,9 @@ function listingFilterConditions(filters: ListingFilters, categoryGroup: SQL | u
   if (filters.manufacturer) conditions.push(eq(catalogProducts.brand, filters.manufacturer))
   if (filters.sourceId) conditions.push(eq(sourceListings.sourceId, filters.sourceId))
   if (filters.stock !== 'all') conditions.push(eq(sourceListingCurrent.available, filters.stock === 'in'))
+  if (filters.currency) conditions.push(eq(sourceListingCurrent.currency, filters.currency))
+  const hasAbsoluteAmountFilter = filters.minPrice !== null || filters.maxPrice !== null || filters.minDiscountAmount !== null || filters.maxDiscountAmount !== null
+  if (hasAbsoluteAmountFilter && !filters.currency) conditions.push(sql`false`)
   if (filters.minPrice !== null) conditions.push(gte(sourceListingCurrent.price, String(filters.minPrice)))
   if (filters.maxPrice !== null) conditions.push(lte(sourceListingCurrent.price, String(filters.maxPrice)))
   const discountAmount = sql`${sourceListingCurrent.compareAtPrice} - ${sourceListingCurrent.price}`
@@ -179,9 +186,11 @@ export async function persistCatalogSnapshot(
   records: readonly NormalizedCatalogRecord[],
   input: CatalogObservationInput = {},
 ) {
+  if (input.complete && !input.runId) throw new Error('A complete snapshot needs a run ID for absence evidence')
   const observedAt = input.observedAt ?? new Date()
   return db.transaction(async (tx) => {
     const persisted = []
+    const listingKeys = records.map((record) => record.listing.listingKey)
     let evidenceId: string | undefined
     if (input.evidence && input.runId) {
       const [evidence] = await tx.insert(sourceEvidence)
@@ -228,13 +237,20 @@ export async function persistCatalogSnapshot(
       await tx.insert(sourceListingCurrent).values({
         listingId: listing.id, observedAt, title: record.listing.current.title, price: record.listing.current.price?.toFixed(2),
         compareAtPrice: record.listing.current.compareAtPrice?.toFixed(2),
-        currency: record.listing.current.currency, available: record.listing.current.available, stockQuantity: record.listing.current.stockQuantity, updatedAt: observedAt,
+        currency: record.listing.current.currency, available: record.listing.current.available, presence: 'present', firstSeenAt: observedAt, lastSeenAt: observedAt, missingSince: null, missingRunId: null, reappearedAt: null, reappearedRunId: null, stockQuantity: record.listing.current.stockQuantity, updatedAt: observedAt,
       }).onConflictDoUpdate({ target: sourceListingCurrent.listingId, set: {
         observedAt, title: record.listing.current.title, price: record.listing.current.price?.toFixed(2),
         compareAtPrice: record.listing.current.compareAtPrice?.toFixed(2),
-        currency: record.listing.current.currency, available: record.listing.current.available, stockQuantity: record.listing.current.stockQuantity, updatedAt: observedAt,
+        currency: record.listing.current.currency, available: record.listing.current.available, presence: 'present', lastSeenAt: observedAt, missingSince: null, missingRunId: null, reappearedAt: sql`case when ${sourceListingCurrent.presence} = 'missing' then ${observedAt} else ${sourceListingCurrent.reappearedAt} end`, reappearedRunId: sql`case when ${sourceListingCurrent.presence} = 'missing' then ${input.runId ?? null} else ${sourceListingCurrent.reappearedRunId} end`, stockQuantity: record.listing.current.stockQuantity, updatedAt: observedAt,
       } })
       persisted.push({ productId: product.id, variantId: variant.id, listingId: listing.id })
+    }
+    if (input.complete) {
+      const omitted = listingKeys.length
+        ? sql`${sourceListings.listingKey} not in (${sql.join(listingKeys.map((key) => sql`${key}`), sql`, `)})`
+        : sql`true`
+      await tx.update(sourceListingCurrent).set({ presence: 'missing', missingSince: sql`coalesce(${sourceListingCurrent.missingSince}, ${observedAt})`, missingRunId: sql`coalesce(${sourceListingCurrent.missingRunId}, ${input.runId ?? null})`, updatedAt: observedAt })
+        .where(sql`${sourceListingCurrent.listingId} in (select ${sourceListings.id} from ${sourceListings} where ${sourceListings.sourceId} = ${sourceId} and ${omitted})`)
     }
     return persisted
   })

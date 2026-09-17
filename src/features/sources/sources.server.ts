@@ -1,13 +1,15 @@
-import { desc, eq } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import { getSourceModule } from '~/modules/registry'
 import { getDatabase } from '~/server/db/index.server'
-import { catalogSources, type CatalogSource } from '~/server/db/schema'
+import { catalogSources, collectionRuns, type CatalogSource } from '~/server/db/schema'
 import {
   catalogSourceSummarySchema,
   type CatalogSourceSummary,
   type CreateCatalogSourceInput,
   type UpdateSourceScheduleInput,
+  type UpdateSourceCatalogOptionsInput,
 } from './sources.schemas'
+import { shopifySourceConfigSchema } from '~/modules/shopify'
 
 function isUniqueConstraintViolation(error: unknown): boolean {
   let current = error
@@ -44,6 +46,8 @@ function summarizeCatalogSource(source: CatalogSource): CatalogSourceSummary {
       scheduleRequestLimit: source.scheduleRequestLimit,
       nextRunAt: source.nextRunAt?.toISOString() ?? null,
       summary: 'Source module unavailable',
+      currency: null,
+      stockCardsEnabled: false,
       createdAt: source.createdAt.toISOString(),
     })
   }
@@ -61,6 +65,8 @@ function summarizeCatalogSource(source: CatalogSource): CatalogSourceSummary {
     scheduleRequestLimit: source.scheduleRequestLimit,
     nextRunAt: source.nextRunAt?.toISOString() ?? null,
     summary: normalized.summary,
+    currency: typeof normalized.config.currency === 'string' ? normalized.config.currency : null,
+    stockCardsEnabled: normalized.config.stockCardsEnabled === true,
     createdAt: source.createdAt.toISOString(),
   })
 }
@@ -77,6 +83,21 @@ export async function updateSourceScheduleInDatabase(input: UpdateSourceSchedule
   }).where(eq(catalogSources.id, input.sourceId)).returning()
   if (!source) throw new Error('Catalog source not found')
   return summarizeCatalogSource(source)
+}
+
+export async function updateSourceCatalogOptionsInDatabase(input: UpdateSourceCatalogOptionsInput): Promise<CatalogSourceSummary> {
+  const [source] = await getDatabase().select().from(catalogSources).where(eq(catalogSources.id, input.sourceId)).limit(1)
+  if (!source) throw new Error('Catalog source not found')
+  if (source.moduleId !== 'shopify') throw new Error('Catalog options are not available for this source')
+  shopifySourceConfigSchema.parse(source.config)
+  const [activeRun] = await getDatabase().select({ id: collectionRuns.id }).from(collectionRuns)
+    .where(and(eq(collectionRuns.sourceId, input.sourceId), inArray(collectionRuns.status, ['queued', 'running']))).limit(1)
+  if (activeRun) throw new Error('Pause or finish the active collection before changing catalog options')
+  const nextConfig = { ...source.config, ...(input.currency ? { currency: input.currency } : {}), stockCardsEnabled: input.stockCardsEnabled }
+  if (!input.currency) delete nextConfig.currency
+  const [updated] = await getDatabase().update(catalogSources).set({ config: nextConfig, updatedAt: new Date() }).where(eq(catalogSources.id, input.sourceId)).returning()
+  if (!updated) throw new Error('Catalog source not found')
+  return summarizeCatalogSource(updated)
 }
 
 export async function listCatalogSourcesFromDatabase(): Promise<{

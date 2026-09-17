@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router'
+import { Link, useRouter } from '@tanstack/react-router'
 import { Badge } from '~/components/ui/badge'
 import { buttonStyles } from '~/components/ui/button'
 import { EmptyState } from '~/components/ui/empty-state'
@@ -8,6 +8,7 @@ import { SourceRunControl } from './source-run-control'
 import { MediaRunControl } from './media-run-control'
 import { SourceScheduleControl } from './source-schedule-control'
 import type { listMediaCaptureRuns } from '~/features/media/media.functions'
+import { SourceCatalogOptionsControl } from './source-catalog-options-control'
 
 const createdDateFormatter = new Intl.DateTimeFormat('en', {
   day: 'numeric',
@@ -31,6 +32,7 @@ export function SourceList({
   mediaCaptureEnabled?: boolean
   latestMediaRuns?: Record<string, Awaited<ReturnType<typeof listMediaCaptureRuns>>[number] | undefined>
 }) {
+  const router = useRouter()
   if (sources.length === 0) {
     return (
       <EmptyState
@@ -73,6 +75,7 @@ export function SourceList({
             </div>
           </article>
           <SourceScheduleControl source={source} />
+          {source.moduleId === 'shopify' ? <SourceCatalogOptionsControl source={source} onSaved={() => { void router.invalidate({ sync: true }) }} /> : null}
         </li>
       ))}
     </ul>

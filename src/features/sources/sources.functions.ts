@@ -4,10 +4,11 @@ import {
   createCatalogSourceInDatabase,
   listCatalogSourcesFromDatabase,
   updateSourceScheduleInDatabase,
+  updateSourceCatalogOptionsInDatabase,
 } from './sources.server'
 import { createCatalogSourceInputSchema } from './sources.schemas'
 import { interPageWaitMsSchema, manualCollectionRequestLimitSchema } from './sources.schemas'
-import { updateSourceScheduleSchema } from './sources.schemas'
+import { updateSourceScheduleSchema, updateSourceCatalogOptionsSchema } from './sources.schemas'
 import { withRequiredSession } from '~/server/auth.server'
 import { continueDeferredCollectionInDatabase, enqueueCatalogCollectionInDatabase, getCollectionRunFromDatabase, listCollectionRunsFromDatabase } from './runs.server'
 import { z } from 'zod'
@@ -34,6 +35,11 @@ export const updateSourceSchedule = createServerFn({ method: 'POST' })
     setResponseHeader('Cache-Control', 'private, no-store')
     return updateSourceScheduleInDatabase(data)
   }))
+
+export const updateSourceCatalogOptions = createServerFn({ method: 'POST' }).validator(updateSourceCatalogOptionsSchema).handler(async ({ data }) => withRequiredSession(async () => {
+  setResponseHeader('Cache-Control', 'private, no-store')
+  return updateSourceCatalogOptionsInDatabase(data)
+}))
 
 export const listCollectionRuns = createServerFn({ method: 'GET' })
   .validator(z.object({ sourceId: z.uuid().optional() }))

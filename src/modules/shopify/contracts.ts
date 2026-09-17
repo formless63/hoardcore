@@ -48,6 +48,7 @@ export interface ShopifyCollectionContext {
   sourceKey: string
   baseUrl: string
   observedAt?: string
+  currency?: string
 }
 
 export function parseShopifyCollection(input: unknown): ShopifyCollectionResponse {
@@ -110,7 +111,7 @@ export function normalizeShopifyCollection(
           barcode: variant.barcode,
           price,
           compareAtPrice,
-          // Currency is intentionally absent until supplied by a source payload/config.
+          ...(context.currency ? { currency: context.currency } : {}),
           available,
           imageUrl,
         },
@@ -121,7 +122,7 @@ export function normalizeShopifyCollection(
           variantKey,
           url: `${storefrontOrigin}/products/${product.handle}?variant=${variant.id}`,
           imageUrl,
-          current: { title: product.title, price, compareAtPrice, available, stockQuantity: variant.inventory_quantity ?? undefined },
+          current: { title: product.title, price, compareAtPrice, ...(context.currency ? { currency: context.currency } : {}), available, stockQuantity: variant.inventory_quantity ?? undefined },
           observedAt: context.observedAt,
         },
       } satisfies NormalizedCatalogRecord

@@ -29,8 +29,12 @@ export interface CollectShopifySnapshotInput {
   run?: ShopifyCollectionRun
   sleep?: ShopifyTransportOptions['sleep']
   observedAt?: string
+  currency?: string
   onEvent?: ShopifyTransportOptions['onEvent']
   onPage?: (page: number, products: number, totalProducts: number) => Promise<void> | void
+  /** Previously validated pages are durable evidence, not pages to fetch again. */
+  checkpoint?: { pages: unknown[]; firstPageCache?: ShopifyCacheEntry }
+  onPageCheckpoint?: (checkpoint: { page: number; pages: unknown[]; firstPageCache: ShopifyCacheEntry; productCount: number }) => Promise<void> | void
 }
 
 export type ShopifySnapshotResult =
@@ -58,9 +62,9 @@ export async function collectShopifySnapshot(
   input: CollectShopifySnapshotInput,
 ): Promise<ShopifySnapshotResult> {
   const run = input.run ?? createShopifyCollectionRun(input.policy.maxRequests)
-  const pages: unknown[] = []
-  let firstPageCache: ShopifyCacheEntry | undefined
-  let productCount = 0
+  const pages: unknown[] = [...(input.checkpoint?.pages ?? [])]
+  let firstPageCache: ShopifyCacheEntry | undefined = input.checkpoint?.firstPageCache
+  let productCount = pages.reduce<number>((count, payload) => count + parseShopifyCollection(payload).products.length, 0)
 
   function snapshot(
     status: 'ok' | 'partial',
@@ -79,6 +83,7 @@ export async function collectShopifySnapshot(
         sourceKey: input.sourceKey,
         baseUrl: input.catalogUrl,
         observedAt: input.observedAt,
+        currency: input.currency,
       }),
       // Preserve the source JSON, including blank optional fields that the
       // normalized records intentionally omit.
@@ -86,7 +91,13 @@ export async function collectShopifySnapshot(
     }
   }
 
-  for (let page = 1; ; page += 1) {
+  // The last validated page already proved the catalog ended. A restart while
+  // supplementing/persisting must not request an unnecessary next page.
+  if (pages.length && parseShopifyCollection(pages[pages.length - 1]).products.length < 250) {
+    return snapshot('ok')
+  }
+
+  for (let page = pages.length + 1; ; page += 1) {
     let result: Awaited<ReturnType<typeof fetchShopifyCollectionPage>>
     try {
       result = await fetchShopifyCollectionPage(
@@ -131,6 +142,7 @@ export async function collectShopifySnapshot(
     }
     pages.push(result.status === 'not_modified' ? input.cache!.payload : result.payload)
     productCount += parsedPage.products.length
+    await input.onPageCheckpoint?.({ page, pages: [...pages], firstPageCache: firstPageCache ?? {}, productCount })
     await input.onPage?.(page, parsedPage.products.length, productCount)
 
     if (parsedPage.products.length < 250) {

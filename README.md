@@ -20,16 +20,19 @@ Operator acceptance of each deployment remains important.
 - In-process Graphile Worker for durable jobs; the application and worker run in one container.
 - Catalog source registration for many independent source scopes, including module-owned Shopify
   storefront and collection-scope validation.
-- Fixture-driven, conservative Shopify collection transport and snapshot persistence. Each
+- Fixture-driven, conservative Shopify collection transport and snapshot persistence, with
+  durable page checkpoints and an optional collection-card stock-count supplement. Each
   installation must validate access and behavior against its own approved sources.
 - Per-source collection enable/pause and opt-in daily, three-day, or weekly schedules. New sources
   default to manual-only; the deployment-wide collection gate still applies.
 - Current listings tracker with source/product/variant detail, observation history, and retained
   evidence. The listings workbench has URL-persisted filters/sort, saved views, and source-specific
   category-group corrections. Listing detail includes bounded, paginated observation history,
-  price/stock trends, private review decisions, and a local estimate-only margin calculator. The
-  overview shows inventory totals, source health, activity, and observed price/stock changes.
-  Numeric stock quantity is shown only when a source actually provides it.
+  price/stock trends, private notes, shared decision history, and saved opportunity scenarios.
+  A separate queue ranks opportunities from deterministic economics and research signals. The
+  overview shows inventory totals, source health, activity, observed price/stock changes, and
+  listings newly missing from or returning to a complete source snapshot. Numeric stock quantity
+  is shown only when a source actually provides it; missing is distinct from out of stock.
 - Versioned research packet export, validated preview/import, immutable raw submissions,
   manual comparable entry, and a scoped bearer-token API for coding agents.
 - Opt-in photo capture that automatically queues paced, bounded follow-up batches after collection,

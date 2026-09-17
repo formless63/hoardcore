@@ -156,14 +156,20 @@ export async function importResearchResult(db: Database, userId: string, input: 
 export async function listResearchHistory(db: Database, userId: string, sourceListingId: string) {
   // Query the packet envelope before loading raw payloads. A user may have
   // thousands of unrelated submissions, including notes-only records.
-  const listingEnvelope = JSON.stringify({ records: [{ listing: { hoardcoreId: sourceListingId } }] })
-  const listingReference = JSON.stringify({ records: [{ reference: { entityType: 'source_listing', hoardcoreId: sourceListingId } }] })
+  // Exports use the immutable source listing key, while this UI boundary is
+  // addressed by the database UUID. Search for both representations so
+  // provenance remains visible after import.
+  const [listing] = await db.select({ listingKey: sourceListings.listingKey }).from(sourceListings).where(eq(sourceListings.id, sourceListingId)).limit(1)
+  const listingKeys = [sourceListingId, listing?.listingKey].filter((value): value is string => Boolean(value))
+  const listingEnvelopes = listingKeys.flatMap((key) => [
+    JSON.stringify({ records: [{ listing: { hoardcoreId: key } }] }),
+    JSON.stringify({ records: [{ reference: { entityType: 'source_listing', hoardcoreId: key } }] }),
+  ])
   return db.select({ id: researchSubmissions.id, status: researchSubmissions.status, resultId: researchSubmissions.resultId, completedAt: researchSubmissions.completedAt, createdAt: researchSubmissions.createdAt, rawPayload: researchSubmissions.rawPayload, normalizedPayload: researchSubmissions.normalizedPayload })
     .from(researchSubmissions)
     .innerJoin(researchBatches, eq(researchBatches.id, researchSubmissions.batchId))
     .where(and(eq(researchBatches.createdByUserId, userId), or(
-      sql`${researchBatches.packet} @> ${listingEnvelope}::jsonb`,
-      sql`${researchBatches.packet} @> ${listingReference}::jsonb`,
+      ...listingEnvelopes.map((envelope) => sql`${researchBatches.packet} @> ${envelope}::jsonb`),
     )))
     .orderBy(desc(researchSubmissions.createdAt))
     .limit(50)

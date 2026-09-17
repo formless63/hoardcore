@@ -5,7 +5,7 @@ import { getCatalogListingDetail, getCatalogListingEvidencePayload, getCatalogLi
 import { loadResearchExportRows } from './catalog-research-export.server'
 import { persistCatalogSnapshot } from './catalog-persistence.server'
 import { closeDatabase, getDatabase } from './index.server'
-import { catalogProducts, catalogSources, collectionRuns, sourceEvidence, sourceListingObservations, sourceListings } from './schema'
+import { catalogProducts, catalogSources, collectionRuns, sourceEvidence, sourceListingCurrent, sourceListingObservations, sourceListings } from './schema'
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL
 const describeWithDatabase = testDatabaseUrl ? describe : describe.skip
@@ -112,6 +112,32 @@ describeWithDatabase('catalog snapshot persistence and listing history', () => {
 
     expect(evidence).toHaveLength(1)
     expect(observations).toHaveLength(1)
+  })
+
+  it('marks omissions only for complete snapshots and records missing/reappearance run evidence', async () => {
+    const first = record('presence-one', 10)
+    const second = record('presence-two', 20)
+    await persistCatalogSnapshot(db(), sourceId!, [first, second], { runId, observedAt: new Date('2026-09-16T08:00:00Z') })
+
+    const [partialRun] = await db().insert(collectionRuns).values({ sourceId: sourceId!, status: 'partial' }).returning({ id: collectionRuns.id })
+    await persistCatalogSnapshot(db(), sourceId!, [first], { runId: partialRun.id, complete: false, observedAt: new Date('2026-09-16T09:00:00Z') })
+    let current = await db().select().from(sourceListingCurrent).where(inArray(sourceListingCurrent.listingId, (await db().select({ id: sourceListings.id }).from(sourceListings).where(eq(sourceListings.sourceId, sourceId!))).map((row) => row.id)))
+    expect(current.find((row) => row.presence === 'missing')).toBeUndefined()
+
+    const [completeRun] = await db().insert(collectionRuns).values({ sourceId: sourceId!, status: 'succeeded' }).returning({ id: collectionRuns.id })
+    await persistCatalogSnapshot(db(), sourceId!, [first], { runId: completeRun.id, complete: true, observedAt: new Date('2026-09-16T10:00:00Z') })
+    const secondListing = await db().select({ id: sourceListings.id }).from(sourceListings).where(eq(sourceListings.listingKey, second.listing.listingKey))
+    current = await db().select().from(sourceListingCurrent).where(eq(sourceListingCurrent.listingId, secondListing[0]!.id))
+    expect(current[0]?.presence).toBe('missing')
+    expect(current[0]?.missingRunId).toBe(completeRun.id)
+    expect(current[0]?.missingSince?.toISOString()).toBe('2026-09-16T10:00:00.000Z')
+
+    const [retryRun] = await db().insert(collectionRuns).values({ sourceId: sourceId!, status: 'succeeded' }).returning({ id: collectionRuns.id })
+    await persistCatalogSnapshot(db(), sourceId!, [first, second], { runId: retryRun.id, complete: true, observedAt: new Date('2026-09-16T11:00:00Z') })
+    current = await db().select().from(sourceListingCurrent).where(eq(sourceListingCurrent.listingId, secondListing[0]!.id))
+    expect(current[0]?.presence).toBe('present')
+    expect(current[0]?.reappearedRunId).toBe(retryRun.id)
+    expect(current[0]?.reappearedAt?.toISOString()).toBe('2026-09-16T11:00:00.000Z')
   })
 
   it('allows only one queued or running collection per source', async () => {
