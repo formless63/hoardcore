@@ -5,13 +5,17 @@ import { getPublicSession } from '~/features/auth/auth.functions'
 import { listSavedListingViews } from '~/features/catalog/saved-views.functions'
 import { listWatchedListingIds } from '~/features/watchlist/watchlist.functions'
 import { listResearchSummariesForListings } from '~/features/research/research.functions'
+import { loadResearchSummariesInBatches } from '~/features/research/research-summary-batching'
 import { ListingLoadError, ListingsPending } from '~/features/catalog/listing-load-state'
 
 export const Route = createFileRoute('/listings/')({
   beforeLoad: async () => { if (!(await getPublicSession())) throw redirect({ to: '/login' }) },
   loader: async () => {
     const [{ listings }, savedViews, watchedListingIds] = await Promise.all([listCurrentListings(), listSavedListingViews(), listWatchedListingIds()])
-    const researchSummaries = listings.length ? await listResearchSummariesForListings({ data: { listingIds: listings.map((listing) => listing.id) } }) : {}
+    const researchSummaries = await loadResearchSummariesInBatches(
+      listings.map((listing) => listing.id),
+      (listingIds) => listResearchSummariesForListings({ data: { listingIds } }),
+    )
     return { listings, savedViews, watchedListingIds, researchSummaries }
   },
   head: () => ({ meta: [{ title: 'Listings · Hoardcore' }] }),
