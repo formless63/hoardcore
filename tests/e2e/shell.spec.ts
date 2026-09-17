@@ -27,7 +27,10 @@ test.describe('authenticated navigation', () => {
     const search = page.getByRole('textbox', { name: 'Search current listings' })
     await search.fill('e2e-smoke-filter')
     await search.press('Enter')
-    await expect(page).toHaveURL(/query=e2e-smoke-filter/)
+    // TanStack Router serializes the nested filter object into the URL. The
+    // value is encoded, so assert on the decoded URL rather than assuming a
+    // flat `query=` parameter.
+    expect(decodeURIComponent(page.url())).toContain('e2e-smoke-filter')
 
     // A local fixture may have no listings. When it does, verify the complete
     // user path without assuming a particular source or product identifier.

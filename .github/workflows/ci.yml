@@ -48,3 +48,46 @@ jobs:
 
       - name: Build and typecheck
         run: pnpm build
+
+  browser-smoke:
+    name: Browser smoke (anonymous)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: hoardcore_test
+          POSTGRES_PASSWORD: hoardcore
+          POSTGRES_USER: hoardcore
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hoardcore -d hoardcore_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://hoardcore:hoardcore@127.0.0.1:5432/hoardcore_test
+      BETTER_AUTH_SECRET: ci-only-secret-that-is-long-enough-for-tests
+      BETTER_AUTH_URL: http://127.0.0.1:3000
+      CATALOG_COLLECTION_ENABLED: 'false'
+      MEDIA_CAPTURE_ENABLED: 'false'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@v2
+        with:
+          runtime: node@24
+          cache: true
+          require-lockfile: true
+
+      - name: Apply migrations
+        run: pnpm db:migrate
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run anonymous browser smoke tests
+        run: pnpm exec playwright test tests/e2e/shell.spec.ts
