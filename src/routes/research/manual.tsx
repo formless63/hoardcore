@@ -54,12 +54,15 @@ function ManualResearchPage() {
 
   const fieldError = (field: { state: { meta: { isTouched: boolean; errors: unknown[] } }; name: string }) => field.state.meta.isTouched ? field.state.meta.errors[0] : undefined
   const comparableFields = ['channel', 'price', 'shipping', 'currency', 'url'] as const
-  const hasComparableInput = (name: typeof comparableFields[number], value: string) => comparableFields.some((field) => field !== name && Boolean(field === 'channel' ? value : form.getFieldValue(field)))
+  // Currency has a default value and a URL may cite a notes-only entry; neither
+  // should turn a note into a partially completed market comparable.
+  const hasComparableInput = (name: typeof comparableFields[number]) => (['channel', 'price', 'shipping'] as const)
+    .some((field) => field !== name && Boolean(form.getFieldValue(field).trim()))
   const validateField = (name: typeof comparableFields[number], value: string) => {
     const trimmed = value.trim()
-    if (name === 'channel' && !trimmed && hasComparableInput(name, value)) return 'Enter a marketplace or channel.'
-    if (name === 'price' && !trimmed && hasComparableInput(name, value)) return 'Enter a price.'
-    if (name === 'currency' && hasComparableInput(name, value) && !/^[A-Za-z]{3}$/.test(trimmed)) return 'Use a three-letter currency code.'
+    if (name === 'channel' && !trimmed && hasComparableInput(name)) return 'Enter a marketplace or channel.'
+    if (name === 'price' && !trimmed && hasComparableInput(name)) return 'Enter a price.'
+    if (name === 'currency' && hasComparableInput(name) && !/^[A-Za-z]{3}$/.test(trimmed)) return 'Use a three-letter currency code.'
     if (name === 'shipping' && trimmed && (!Number.isFinite(Number(trimmed)) || Number(trimmed) < 0)) return 'Shipping must be a non-negative number.'
     if (name === 'price' && trimmed && (!Number.isFinite(Number(trimmed)) || Number(trimmed) < 0)) return 'Price must be a non-negative number.'
     if (name === 'url' && trimmed) { try { if (!['http:', 'https:'].includes(new URL(trimmed).protocol)) throw new Error() } catch { return 'Citation URL must use HTTP or HTTPS.' } }
