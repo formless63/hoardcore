@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import { setListingWatched } from './watchlist.functions'
 
@@ -9,17 +10,29 @@ export function WatchButton({ listingId, initialWatched, onChanged }: {
   onChanged?: (watched: boolean) => void
 }) {
   const setWatched = useServerFn(setListingWatched)
-  const [watched, setLocalWatched] = useState(initialWatched)
+  const router = useRouter()
+  // `initialWatched` is the server-backed state. Only retain a temporary
+  // override while its mutation is in flight (or until the invalidated route
+  // has supplied the new server state).
+  const [optimisticWatched, setOptimisticWatched] = useState<boolean | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const watched = optimisticWatched ?? initialWatched
+
+  useEffect(() => {
+    setOptimisticWatched(null)
+    setError('')
+  }, [initialWatched, listingId])
+
   async function toggle() {
     const next = !watched
-    setBusy(true); setError(''); setLocalWatched(next)
+    setBusy(true); setError(''); setOptimisticWatched(next)
     try {
       await setWatched({ data: { listingId, watched: next } })
       onChanged?.(next)
+      await router.invalidate({ sync: true })
     } catch (cause) {
-      setLocalWatched(!next)
+      setOptimisticWatched(null)
       setError(cause instanceof Error ? cause.message : 'Could not update watch')
     } finally { setBusy(false) }
   }

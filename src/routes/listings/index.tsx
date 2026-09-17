@@ -7,8 +7,10 @@ import { listWatchedListingIds } from '~/features/watchlist/watchlist.functions'
 import { listResearchSummariesForListings } from '~/features/research/research.functions'
 import { loadResearchSummariesInBatches } from '~/features/research/research-summary-batching'
 import { ListingLoadError, ListingsPending } from '~/features/catalog/listing-load-state'
+import { listingWorkbenchSearchSchema } from '~/features/catalog/listing-workbench-state'
 
 export const Route = createFileRoute('/listings/')({
+  validateSearch: listingWorkbenchSearchSchema,
   beforeLoad: async () => { if (!(await getPublicSession())) throw redirect({ to: '/login' }) },
   loader: async () => {
     const [{ listings }, savedViews, watchedListingIds] = await Promise.all([listCurrentListings(), listSavedListingViews(), listWatchedListingIds()])
@@ -28,10 +30,11 @@ export const Route = createFileRoute('/listings/')({
 
 function ListingsPage() {
   const { listings, savedViews, watchedListingIds, researchSummaries } = Route.useLoaderData()
+  const workbench = Route.useSearch()
   return (
     <main className="w-full px-1 py-2 sm:px-2" id="main-content">
       <h1 className="sr-only">Current listings</h1>
-      <CurrentListingsTable listings={listings} savedViews={savedViews} watchedListingIds={watchedListingIds} researchSummaries={researchSummaries} />
+      <CurrentListingsTable listings={listings} savedViews={savedViews} watchedListingIds={watchedListingIds} researchSummaries={researchSummaries} workbench={workbench} />
     </main>
   )
 }
