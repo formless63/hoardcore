@@ -67,12 +67,14 @@ async function startWorkerInternal(runtime: WorkerRuntimeState, pool: Pool): Pro
   runtime.runner = await run({
     pgPool: pool,
     taskList: taskRegistry,
-    crontab: '* * * * * catalog.schedule ?id=hoardcore-source-schedule',
+    crontab: catalogScheduleCrontab,
     concurrency: 1,
     noHandleSignals: true,
   })
   runtime.status = { state: 'ready' }
 }
+
+export const catalogScheduleCrontab = '* * * * * catalog_schedule ?id=hoardcore-source-schedule'
 
 export async function enqueueJob<TName extends keyof GraphileWorker.Tasks>(
   name: TName,

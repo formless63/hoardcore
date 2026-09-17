@@ -19,7 +19,7 @@ import { COLLECTION_DISABLED_MESSAGE } from '~/features/sources/collection-gate'
 export interface HoardcoreTaskPayloads {
   'fixture.echo': { value: string }
   'catalog.collect': { sourceId: string; runId: string }
-  'catalog.schedule': Record<string, never>
+  catalog_schedule: Record<string, never>
   'media.capture': { runId: string; after?: string; auto?: boolean }
   'alerts.evaluate': AlertTaskPayload
   'alerts.deliver': AlertDeliveryTaskPayload
@@ -191,7 +191,7 @@ export async function runCatalogCollection(
 export const catalogCollectTask: Task<'catalog.collect'> = async (payload, helpers) => runCatalogCollection(payload, helpers)
 
 /** Per-source schedules are inert until explicitly enabled by an operator. */
-export const catalogScheduleTask: Task<'catalog.schedule'> = async (_payload, helpers) => {
+export const catalogScheduleTask: Task<'catalog_schedule'> = async (_payload, helpers) => {
   if (getServerConfig().CATALOG_COLLECTION_ENABLED !== 'true') return
   const db = getDatabase()
   const now = new Date()
@@ -223,7 +223,7 @@ export const catalogScheduleTask: Task<'catalog.schedule'> = async (_payload, he
         }
       }
     } catch (error) {
-      helpers.logger.error(`catalog.schedule: could not queue source ${source.id}: ${String(error)}`)
+      helpers.logger.error(`catalog_schedule: could not queue source ${source.id}: ${String(error)}`)
     }
   }
 }
@@ -257,7 +257,7 @@ export const mediaCaptureTask: Task<'media.capture'> = async (payload, helpers) 
 export const taskRegistry = {
   'fixture.echo': fixtureEchoTask,
   'catalog.collect': catalogCollectTask,
-  'catalog.schedule': catalogScheduleTask,
+  catalog_schedule: catalogScheduleTask,
   'media.capture': mediaCaptureTask,
   'alerts.evaluate': evaluateCollectionAlertsTask,
   'alerts.deliver': deliverAlertsTask,
