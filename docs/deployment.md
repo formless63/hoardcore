@@ -145,6 +145,14 @@ conservative configured pacing/concurrency and request ceilings, cached or condi
 `Retry-After` handling, and backoff. Respect published access controls and `robots.txt` where
 applicable. Stop on persistent rejection.
 
+Schedules are configured per registration on **Sources**, alongside the manual run controls.
+New and upgraded sources remain **manual only** until an operator opts into a daily, three-day,
+or weekly schedule and sets a scheduled request ceiling. The same page can pause a source; pause
+blocks both manual and scheduled runs. The deployment-wide `CATALOG_COLLECTION_ENABLED=false`
+gate remains authoritative even if a schedule is saved. The in-process worker checks due sources
+once per minute, but does not send source requests for manual-only or paused sources. A scheduled
+run never overrides the normal access checks, pacing, request ceiling, or active-run limit.
+
 Hoardcore does not rotate proxies or identities, bypass CAPTCHAs, spoof browser fingerprints, or
 otherwise evade source controls. Keep fetch, parse, normalize, and persistence stages testable from
 fixtures; never use live source access as an automated test requirement.

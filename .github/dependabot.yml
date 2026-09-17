@@ -13,6 +13,11 @@ updates:
         update-types:
           - minor
           - patch
+    # @types/node tracks the current runtime major. Move majors deliberately
+    # when the next Node line becomes LTS and the production image moves too.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
@@ -29,3 +34,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # Production follows the latest LTS major, not the newer Current line.
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]

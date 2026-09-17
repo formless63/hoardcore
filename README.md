@@ -6,8 +6,9 @@ Hoardcore is an MIT-licensed, self-hosted inventory research tool. It is intende
 
 ## Status
 
-Early development. The authenticated catalog tracker, research interchange, local photo cache,
-watchlists, and opt-in alerts are available. Operator acceptance of each deployment remains important.
+Early development, before the first tagged release. The authenticated catalog tracker, inventory
+overview, research interchange, local photo cache, watchlists, and opt-in alerts are available.
+Operator acceptance of each deployment remains important.
 
 ### Available now
 
@@ -19,10 +20,13 @@ watchlists, and opt-in alerts are available. Operator acceptance of each deploym
 - In-process Graphile Worker for durable jobs; the application and worker run in one container.
 - Catalog source registration for many independent source scopes, including module-owned Shopify
   storefront and collection-scope validation.
-- Fixture-driven, conservative Shopify collection transport and snapshot persistence. Live source
-  acceptance is still pending and must be performed by an operator against an approved source.
+- Fixture-driven, conservative Shopify collection transport and snapshot persistence. Each
+  installation must validate access and behavior against its own approved sources.
+- Per-source collection enable/pause and opt-in daily, three-day, or weekly schedules. New sources
+  default to manual-only; the deployment-wide collection gate still applies.
 - Current listings tracker with source/product/variant detail, observation history, and retained
-  evidence.
+  evidence. The overview shows inventory totals, source health, activity, and observed price/stock
+  changes. Numeric stock quantity is shown only when a source actually provides it.
 - Versioned research packet export, validated preview/import, immutable raw submissions,
   manual comparable entry, and a scoped bearer-token API for coding agents.
 - Opt-in photo capture that automatically queues paced, bounded follow-up batches after collection,
@@ -80,3 +84,9 @@ an early build to an untrusted network.
 
 See [the deployment runbook](docs/deployment.md) for secrets, migrations, health checks, backups,
 containerized gateway networking, and conservative collection operations.
+
+## Releases
+
+The project is moving toward its first `v0.1.0` release. Until then, `main` is a development
+branch and deployments should be pinned to a reviewed commit. See the [release policy and first
+release criteria](docs/releases.md) before treating a build as production-ready.

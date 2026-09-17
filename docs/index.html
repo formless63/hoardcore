@@ -3,44 +3,84 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Hoardcore — inventory creep, organized</title>
-    <link rel="icon" type="image/png" href="favicon.png" />
-    <meta
-      name="description"
-      content="Hoardcore is an open-source, self-hosted toolkit for catalog collection and inventory research."
-    />
-    <style>
-      :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
-      * { box-sizing: border-box; }
-      body { margin: 0; background: #09090b; color: #f4f4f5; }
-      main { width: min(900px, calc(100% - 40px)); margin: 0 auto; padding: 12vh 0; }
-      .eyebrow { color: #71717a; text-transform: uppercase; letter-spacing: .2em; font-size: .75rem; font-weight: 700; }
-      h1 { max-width: 760px; margin: 16px 0 24px; font-size: clamp(3rem, 8vw, 6.5rem); line-height: .93; letter-spacing: -.055em; }
-      p { max-width: 680px; color: #a1a1aa; font-size: 1.2rem; line-height: 1.7; }
-      .card { margin-top: 56px; border: 1px solid #27272a; border-radius: 18px; padding: 28px; background: #18181b80; }
-      .card strong { color: #fafafa; }
-      a { color: #fafafa; }
-    </style>
+    <meta name="theme-color" content="#07111c" />
+    <title>Hoardcore — Track the deal. Keep the evidence.</title>
+    <meta name="description" content="Hoardcore is a self-hosted inventory tracker and research workspace. Collect catalog observations, spot changes, preserve evidence, and decide what is worth buying." />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="stylesheet" href="/site.css" />
   </head>
   <body>
-    <main>
-      <div class="eyebrow">Open source · Self-hosted · MIT</div>
-      <h1>Go Hoardcore.</h1>
-      <p>
-        Replace feature creep with inventory creep. Hoardcore helps you collect sale inventory,
-        organize product research, and keep enough evidence around to explain why buying twelve of
-        something seemed completely reasonable at the time.
-      </p>
-      <div class="card">
-        <strong>Early development.</strong>
-        <p>
-          The authenticated catalog tracker, conservative source collection, provider-neutral
-          research import, private photo cache, watchlists, and opt-in notifications are in active
-          development. Review the deployment runbook and source access rules before operating it.
-        </p>
-        <a href="https://github.com/formless63/hoardcore">View the project on GitHub</a>
-        <a href="deployment.md">Deployment runbook</a>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="brand" href="/" aria-label="Hoardcore home"><span class="brand-notch" aria-hidden="true"></span><span>HOARD<span>CORE</span></span></a>
+        <nav aria-label="Primary navigation">
+          <a href="#features">Features</a>
+          <a href="#how-it-works">How it works</a>
+          <a href="https://github.com/formless63/hoardcore/blob/main/docs/deployment.md">Deploy</a>
+          <a class="nav-github" href="https://github.com/formless63/hoardcore">GitHub <span aria-hidden="true">↗</span></a>
+        </nav>
       </div>
+    </header>
+
+    <main id="main">
+      <section class="hero wrap">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span> Open source · self-hosted · early access</p>
+          <h1>Track the deal.<br /><em>Keep the evidence.</em></h1>
+          <p class="lede">Catalogs change. Prices move. Stock disappears. Hoardcore turns scattered inventory into a searchable history, then keeps the research behind your next buying decision in one place.</p>
+          <div class="hero-actions">
+            <a class="button primary" href="https://github.com/formless63/hoardcore">Explore the code <span aria-hidden="true">↗</span></a>
+            <a class="button secondary" href="https://github.com/formless63/hoardcore/blob/main/docs/deployment.md">Read the deployment guide <span aria-hidden="true">→</span></a>
+          </div>
+          <p class="hero-note">Run it on your own infrastructure. Your catalog observations and research stay in your PostgreSQL database.</p>
+        </div>
+        <div class="hero-art" role="img" aria-label="Illustration of catalog observations becoming inventory insights">
+          <div class="grid-glow" aria-hidden="true"></div>
+          <div class="signal"><span>01 / SOURCE</span><strong>Public catalog</strong><i>Products · variants · prices · availability</i></div>
+          <div class="signal signal-main"><span>02 / HOARDCORE</span><strong>Durable observations</strong><i>Current state + history + evidence</i><div class="signal-bars" aria-hidden="true"><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b></div></div>
+          <div class="signal"><span>03 / DECISION</span><strong>Research &amp; watchlists</strong><i>Comparable prices · notes · alerts</i></div>
+          <div class="flow-line" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <div class="ticker" aria-label="Product principles"><div class="wrap ticker-inner"><span>Source-neutral core</span><span>Observation history</span><span>Provider-neutral research</span><span>Operator-controlled collection</span></div></div>
+
+      <section class="section wrap" id="features">
+        <div class="section-heading"><p class="eyebrow">What works today</p><h2>From source signal to usable context.</h2><p>Hoardcore is already a working tracker, not just a schema or a landing page. The first source module supports Shopify storefronts and collections; one installation can register many independent sources.</p></div>
+        <div class="feature-grid">
+          <article class="feature"><span class="feature-index">01</span><div class="feature-icon" aria-hidden="true">◎</div><h3>Collect conservatively</h3><p>Run bounded, paced catalog collections with access-policy checks and visible run logs. Configure manual or per-source schedules; pause a source whenever you need to.</p></article>
+          <article class="feature"><span class="feature-index">02</span><div class="feature-icon" aria-hidden="true">▤</div><h3>Review what changed</h3><p>Browse current listings with filters, saved views, stock state, pricing, images, and source evidence. An overview surfaces inventory totals and changes across sources.</p></article>
+          <article class="feature"><span class="feature-index">03</span><div class="feature-icon" aria-hidden="true">◇</div><h3>Keep research attached</h3><p>Export versioned research packets, bring structured results back with validation and preview, or add market comparables manually. A scoped API supports coding agents.</p></article>
+          <article class="feature"><span class="feature-index">04</span><div class="feature-icon" aria-hidden="true">◉</div><h3>Watch what matters</h3><p>Watch individual listings or save filter views. Opt in to ntfy notifications for new matching observations without turning every source change into noise.</p></article>
+        </div>
+      </section>
+
+      <section class="section process" id="how-it-works">
+        <div class="wrap process-inner">
+          <div><p class="eyebrow">The workflow</p><h2>Notice it.<br />Investigate it.<br /><em>Remember why.</em></h2><p>Hoardcore separates facts collected from sources from the research and judgment you add later. A current listing never has to erase the trail that led you there.</p><a class="text-link" href="https://github.com/formless63/hoardcore#source-modules">See the module model <span aria-hidden="true">↗</span></a></div>
+          <ol class="steps">
+            <li><span>01</span><div><h3>Register sources</h3><p>Add supported storefronts or collection scopes independently.</p></div></li>
+            <li><span>02</span><div><h3>Collect observations</h3><p>Choose when to run, watch progress, and retain source evidence.</p></div></li>
+            <li><span>03</span><div><h3>Review &amp; research</h3><p>Filter inventory, inspect changes, and attach market context.</p></div></li>
+            <li><span>04</span><div><h3>Act on a signal</h3><p>Watch a listing, receive opt-in alerts, or keep investigating.</p></div></li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="section wrap architecture">
+        <div><p class="eyebrow">Small on purpose</p><h2>Your stack. Your data.</h2><p>One application container, one PostgreSQL database. The durable job worker runs inside the app process; committed migrations run there on startup too. There is no required Hoardcore account service, separate worker, migration sidecar, or object store.</p><p>Sign in through an operator-chosen OIDC provider. Existing linked accounts can optionally use email magic links when SMTP is configured.</p><a class="button secondary" href="https://github.com/formless63/hoardcore/blob/main/docs/deployment.md">Deployment details <span aria-hidden="true">→</span></a></div>
+        <div class="stack-diagram" role="img" aria-label="One Hoardcore application containing web UI, source modules, and in-process worker, connected to PostgreSQL">
+          <div class="stack-app"><span>ONE APP CONTAINER</span><strong>Hoardcore</strong><div><small>Web UI</small><small>Source modules</small><small>Job worker</small></div></div>
+          <div class="stack-connector"></div>
+          <div class="stack-db"><span>ONE DATABASE</span><strong>PostgreSQL</strong><small>Current state · observations · research · media</small></div>
+        </div>
+      </section>
+
+      <section class="section roadmap">
+        <div class="wrap roadmap-inner"><div><p class="eyebrow">Still growing</p><h2>Built in the open.</h2><p>This is early software. More source modules, complete-snapshot presence tracking, and deterministic opportunity calculations are next. We won't claim an absent listing is “gone” based on an incomplete collection.</p></div><div class="roadmap-links"><a href="https://github.com/formless63/hoardcore/issues">Follow development <span aria-hidden="true">↗</span></a><a href="https://github.com/formless63/hoardcore/blob/main/README.md">Read project status <span aria-hidden="true">↗</span></a></div></div>
+      </section>
     </main>
+    <footer><div class="wrap footer-inner"><div class="brand"><span class="brand-notch" aria-hidden="true"></span><span>HOARD<span>CORE</span></span></div><p>Inventory acquisition, with a memory.</p><span>MIT licensed · Self-hosted</span></div></footer>
   </body>
 </html>
