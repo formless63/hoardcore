@@ -14,6 +14,8 @@ import { WatchButton } from '~/features/watchlist/watch-button'
 import { stockLabel } from '~/features/catalog/stock-label'
 import { ListingTrends } from '~/features/catalog/listing-trend-panel'
 import { OpportunityCalculator } from '~/features/opportunities/opportunity-calculator'
+import { getCurrentListingDecision } from '~/features/catalog/listing-decisions.functions'
+import { ListingDecisionControl } from '~/features/catalog/listing-decision-control'
 
 export const Route = createFileRoute('/listings/$listingId')({
   beforeLoad: async () => { if (!(await getPublicSession())) throw redirect({ to: '/login' }) },
@@ -23,7 +25,8 @@ export const Route = createFileRoute('/listings/$listingId')({
       listListingResearchComparables({ data: { listingId: params.listingId } }),
       listListingResearchHistory({ data: { listingId: params.listingId } }),
       listWatchedListingIds(),
-    ]).then(([comparables, history, watchedListingIds]) => ({ comparables, history, watched: watchedListingIds.includes(params.listingId) }))
+      getCurrentListingDecision({ data: { listingId: params.listingId } }),
+    ]).then(([comparables, history, watchedListingIds, decision]) => ({ comparables, history, watched: watchedListingIds.includes(params.listingId), decision }))
     return { detail, supplement }
   },
   head: () => ({ meta: [{ title: 'Listing detail · Hoardcore' }] }),
@@ -91,6 +94,7 @@ function ListingDetailPage() {
     {detail.product.description ? <p className="mt-4 border-t border-border pt-3 text-xs leading-5 text-muted-foreground">{detail.product.description}</p> : null}
     <ListingTrends detail={detail} />
     <OpportunityCalculator price={detail.current.price} currency={detail.current.currency} />
+    <Await promise={supplement} fallback={null}>{({ decision }) => <ListingDecisionControl listingId={detail.id} initial={decision} />}</Await>
     <Await promise={supplement} fallback={<div aria-label="Loading research" className="mt-4 space-y-2"><div className="h-12 animate-pulse rounded bg-muted motion-reduce:animate-none" /><div className="h-12 animate-pulse rounded bg-muted motion-reduce:animate-none" /></div>}>{({ comparables, history }) => <><ResearchComparableSummary comparables={comparables} /><ResearchHistoryPanel history={history} /></>}</Await>
     <section className="mt-5" aria-label="Listing observations and evidence"><h2 className="text-sm font-medium text-foreground">Observation history ({detail.observations.length})</h2>{detail.observations.length ? <div className="mt-2">{detail.observations.map((observation) => <Observation key={observation.id} listingId={detail.id} observation={observation} />)}</div> : <p className="mt-2 text-xs text-muted-foreground">No observations recorded yet.</p>}</section>
   </main>

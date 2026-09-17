@@ -1,0 +1,5 @@
+import { and, eq } from 'drizzle-orm'
+import type { Database } from '~/server/db/db.server'
+import { listingDecisions } from '~/server/db/schema/listing-decisions'
+export async function getListingDecision(db: Database, userId: string, listingId: string) { const [row] = await db.select({ state: listingDecisions.state, note: listingDecisions.note, expectedQuantity: listingDecisions.expectedQuantity }).from(listingDecisions).where(and(eq(listingDecisions.userId, userId), eq(listingDecisions.listingId, listingId))); return row ?? { state: 'unreviewed' as const, note: '', expectedQuantity: null } }
+export async function saveListingDecision(db: Database, userId: string, listingId: string, input: { state: 'unreviewed' | 'researching' | 'pass' | 'buy_candidate'; note: string; expectedQuantity: number | null }) { await db.insert(listingDecisions).values({ userId, listingId, ...input }).onConflictDoUpdate({ target: [listingDecisions.userId, listingDecisions.listingId], set: { ...input, updatedAt: new Date() } }); return getListingDecision(db, userId, listingId) }
