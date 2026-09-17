@@ -16,6 +16,7 @@ import { DEFAULT_THEME, THEME_BOOTSTRAP_SCRIPT } from '~/components/themes/theme
 import { ThemeProvider } from '~/components/themes/theme-provider'
 import appCss from '~/styles/app.css?url'
 import { authClient } from '~/lib/auth-client'
+import { HoardcoreWordmark } from '~/components/brand/hoardcore-wordmark'
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient
@@ -35,7 +36,7 @@ export const Route = createRootRouteWithContext<{
         content: 'Self-hosted inventory research.',
       },
     ],
-    links: [{ rel: 'stylesheet', href: appCss }],
+    links: [{ rel: 'stylesheet', href: appCss }, { rel: 'icon', type: 'image/png', href: '/favicon.png' }, { rel: 'apple-touch-icon', href: '/favicon.png' }],
   }),
   component: Outlet,
   shellComponent: RootDocument,
@@ -65,9 +66,9 @@ function RootDocument({ children }: { children: ReactNode }) {
                   <Link
                     to="/"
                     aria-label="Hoardcore overview"
-                    className="font-semibold tracking-tight text-foreground outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring"
+                    className="shrink-0 outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    hoardcore
+                    <HoardcoreWordmark />
                   </Link>
                 </div>
                 <nav
