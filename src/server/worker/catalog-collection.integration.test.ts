@@ -30,7 +30,7 @@ describe.skipIf(!testDatabaseUrl)('catalog collection worker safety', () => {
     await expect(runCatalogCollection(
       { sourceId, runId: run.id },
       { logger: { info: vi.fn() } },
-      { accessPolicy: async () => true, http },
+      { collectionEnabled: true, accessPolicy: async () => true, http },
     )).resolves.toBeUndefined()
 
     const [recorded] = await getDatabase().select().from(collectionRuns).where(eq(collectionRuns.id, run.id))
@@ -73,5 +73,73 @@ describe.skipIf(!testDatabaseUrl)('catalog collection worker safety', () => {
     expect(http).not.toHaveBeenCalled()
     const [recorded] = await getDatabase().select().from(collectionRuns).where(eq(collectionRuns.id, run.id))
     expect(recorded).toMatchObject({ status: 'failed', error: 'Collection is paused for this source' })
+  })
+
+  it('records invalid persisted Shopify configuration as failed instead of leaving a run active', async () => {
+    const [source] = await getDatabase().insert(catalogSources).values({
+      moduleId: 'shopify', displayName: 'Invalid config fixture', sourceKey: `invalid-${crypto.randomUUID()}`,
+      config: { catalogUrl: 'http://127.0.0.1/' },
+    }).returning({ id: catalogSources.id })
+    sourceId = source.id
+    const [run] = await getDatabase().insert(collectionRuns).values({ sourceId, requestLimit: 2 }).returning({ id: collectionRuns.id })
+    const http = vi.fn()
+
+    await expect(runCatalogCollection(
+      { sourceId, runId: run.id },
+      { logger: { info: vi.fn() } },
+      { collectionEnabled: true, http },
+    )).resolves.toBeUndefined()
+
+    expect(http).not.toHaveBeenCalled()
+    const [recorded] = await getDatabase().select().from(collectionRuns).where(eq(collectionRuns.id, run.id))
+    expect(recorded).toMatchObject({ status: 'failed' })
+    expect(recorded?.error).toContain('Catalog URL must use HTTPS')
+  })
+
+  it('does not send first-page validators from a prior multi-page snapshot', async () => {
+    const normalized = normalizeShopifyCatalogUrl(`https://fixture-${crypto.randomUUID()}.invalid/collections/sale`)
+    const [source] = await getDatabase().insert(catalogSources).values({
+      moduleId: 'shopify', displayName: 'Multi-page fixture', sourceKey: normalized.sourceKey, config: normalized.config,
+    }).returning({ id: catalogSources.id })
+    sourceId = source.id
+    await getDatabase().insert(collectionRuns).values({
+      sourceId, status: 'succeeded', requestLimit: 3, pageCount: 2, etag: '"first-page"', completedAt: new Date(),
+    })
+    const [run] = await getDatabase().insert(collectionRuns).values({ sourceId, requestLimit: 2 }).returning({ id: collectionRuns.id })
+    const http = vi.fn().mockResolvedValue({ status: 200, headers: {}, json: async () => ({ products: [] }) })
+
+    await runCatalogCollection(
+      { sourceId, runId: run.id },
+      { logger: { info: vi.fn() } },
+      { collectionEnabled: true, accessPolicy: async () => true, http },
+    )
+
+    expect(http).toHaveBeenCalledTimes(1)
+    expect(http.mock.calls[0]?.[1].headers).not.toHaveProperty('if-none-match')
+  })
+
+  it('durably defers a long source Retry-After instead of holding the worker', async () => {
+    const normalized = normalizeShopifyCatalogUrl(`https://fixture-${crypto.randomUUID()}.invalid/collections/sale`)
+    const [source] = await getDatabase().insert(catalogSources).values({
+      moduleId: 'shopify', displayName: 'Retry-after fixture', sourceKey: normalized.sourceKey, config: normalized.config,
+    }).returning({ id: catalogSources.id })
+    sourceId = source.id
+    const [run] = await getDatabase().insert(collectionRuns).values({ sourceId, requestLimit: 2 }).returning({ id: collectionRuns.id })
+    const addJob = vi.fn().mockResolvedValue({})
+    const http = vi.fn().mockResolvedValue({ status: 429, headers: { 'retry-after': '86400' }, json: async () => ({}) })
+
+    await runCatalogCollection(
+      { sourceId, runId: run.id },
+      { logger: { info: vi.fn() }, addJob },
+      { collectionEnabled: true, accessPolicy: async () => true, http },
+    )
+
+    expect(http).toHaveBeenCalledTimes(1)
+    expect(addJob).toHaveBeenCalledWith('catalog.collect', { sourceId, runId: run.id }, expect.objectContaining({
+      runAt: expect.any(Date), maxAttempts: 1,
+    }))
+    const [recorded] = await getDatabase().select().from(collectionRuns).where(eq(collectionRuns.id, run.id))
+    expect(recorded).toMatchObject({ status: 'queued', requestCount: '1' })
+    expect(recorded?.error).toContain('Deferred until')
   })
 })

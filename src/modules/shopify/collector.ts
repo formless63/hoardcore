@@ -109,7 +109,7 @@ export async function collectShopifySnapshot(
       throw error
     }
 
-    if (result.status === 'not_modified') {
+    if (result.status === 'not_modified' && input.cache?.payload === undefined) {
       return {
         status: 'not_modified',
         cache: input.cache ?? {},
@@ -120,13 +120,16 @@ export async function collectShopifySnapshot(
     if (page === 1) firstPageCache = result.cache
     let parsedPage: ReturnType<typeof parseShopifyCollection>
     try {
-      parsedPage = parseShopifyCollection(result.payload)
+      // A conditional 304 only proves that the first page is unchanged. When
+      // its cached payload was full, later pages may still have changed (or
+      // appeared), so continue the normal pagination flow from that evidence.
+      parsedPage = parseShopifyCollection(result.status === 'not_modified' ? input.cache!.payload : result.payload)
     } catch (error) {
       if (!(error instanceof ZodError) || pages.length === 0) throw error
       const detail = error.issues.slice(0, 3).map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')
       return snapshot('partial', { kind: 'invalid_page', page, detail }, result.payload)
     }
-    pages.push(result.payload)
+    pages.push(result.status === 'not_modified' ? input.cache!.payload : result.payload)
     productCount += parsedPage.products.length
     await input.onPage?.(page, parsedPage.products.length, productCount)
 

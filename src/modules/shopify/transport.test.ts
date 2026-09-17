@@ -17,6 +17,7 @@ describe('Shopify collection transport', () => {
     expect(result.endpoint).toBe('https://store.invalid/collections/sale/products.json?limit=250&page=2')
     expect(http).toHaveBeenCalledWith(result.endpoint, expect.objectContaining({
       headers: expect.objectContaining({ accept: 'application/json', 'user-agent': expect.stringContaining('Hoardcore') }),
+      redirect: 'error',
     }))
     expect(result.cache).toMatchObject({ etag: '"v1"', lastModified: 'yesterday', payload: { products: [] } })
   })
@@ -43,6 +44,54 @@ describe('Shopify collection transport', () => {
     expect(result.status).toBe('ok')
     expect(sleeps).toContain(2000)
     expect(http).toHaveBeenCalledTimes(2)
+  })
+
+  it('defers a long Retry-After instead of occupying the worker or retrying early', async () => {
+    const sleeps: number[] = []
+    const http = vi.fn()
+      .mockResolvedValueOnce(response(429, {}, { 'retry-after': '86400' }))
+      .mockResolvedValueOnce(response(200, { products: [] }))
+    await expect(fetchShopifyCollectionPage('https://store.invalid', 1, undefined, {
+      http,
+      minimumDelayMs: 0,
+      sleep: async (milliseconds) => { sleeps.push(milliseconds) },
+    })).rejects.toMatchObject({ kind: 'retry_after', status: 429, retryAfterMs: 86_400_000 })
+    expect(sleeps).toEqual([])
+    expect(http).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects redirects and oversized response bodies before parsing', async () => {
+    await expect(fetchShopifyCollectionPage('https://store.invalid', 1, undefined, {
+      http: async () => response(302), sleep: async () => {},
+    })).rejects.toMatchObject({ kind: 'redirect_rejected', status: 302 })
+    const oversized = vi.fn().mockResolvedValue(response(200, { products: [] }, { 'content-length': '101' }))
+    await expect(fetchShopifyCollectionPage('https://store.invalid', 1, undefined, {
+      http: oversized, maxResponseBytes: 100, sleep: async () => {},
+    })).rejects.toMatchObject({ kind: 'response_too_large', status: 200 })
+    expect(oversized.mock.results[0]?.value).toBeDefined()
+
+    const json = vi.fn()
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"products":'))
+        controller.enqueue(new TextEncoder().encode('[]}'.repeat(50)))
+        controller.close()
+      },
+    })
+    await expect(fetchShopifyCollectionPage('https://store.invalid', 1, undefined, {
+      http: async () => ({ status: 200, headers: {}, body, json }), maxResponseBytes: 20, sleep: async () => {},
+    })).rejects.toMatchObject({ kind: 'response_too_large', status: 200 })
+    expect(json).not.toHaveBeenCalled()
+  })
+
+  it('aborts a stalled request at its configured deadline', async () => {
+    const http = vi.fn((_url: string, init: { signal?: AbortSignal }) => new Promise<ShopifyHttpResponse>((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+    }))
+    await expect(fetchShopifyCollectionPage('https://store.invalid', 1, undefined, {
+      http, requestTimeoutMs: 1, sleep: async () => {},
+    })).rejects.toMatchObject({ kind: 'timeout' })
+    expect(http).toHaveBeenCalledTimes(1)
   })
 
   it('stops immediately on persistent rejection and enforces the request ceiling', async () => {

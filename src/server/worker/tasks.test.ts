@@ -31,6 +31,13 @@ describe('embedded worker task registry', () => {
     await expect(unavailable('https://unknown.invalid/products.json')).resolves.toBe(false)
   })
 
+  it('rejects robots redirects without following them', async () => {
+    const http = vi.fn().mockResolvedValue(new Response(null, { status: 302, headers: { location: 'https://internal.invalid/' } }))
+    const policy = createRobotsAccessPolicy(createShopifyCollectionRun(2), http)
+    await expect(policy('https://synthetic.invalid/products.json')).resolves.toBe(false)
+    expect(http).toHaveBeenCalledWith('https://synthetic.invalid/robots.txt', expect.objectContaining({ redirect: 'error' }))
+  })
+
   it('evaluates exact robots paths, wildcards, end anchors, and user-agent groups', async () => {
     const body = [
       'User-agent: *',

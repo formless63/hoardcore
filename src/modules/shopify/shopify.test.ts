@@ -48,6 +48,12 @@ describe('Shopify source registration', () => {
     ).toThrow('Catalog URL cannot include credentials')
   })
 
+  it('rejects unsafe literal addresses and nonstandard ports at registration', () => {
+    for (const catalogUrl of ['https://127.0.0.1', 'https://[::1]', 'https://10.0.0.1', 'https://shop.example:8443']) {
+      expect(() => shopifyModule.sourceRegistration.normalize({ catalogUrl })).toThrow()
+    }
+  })
+
   it('reports invalid input with the shared schema', () => {
     expect(shopifySourceInputSchema.safeParse({ catalogUrl: 'not a host' }).success).toBe(false)
   })

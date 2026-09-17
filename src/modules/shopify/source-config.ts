@@ -1,4 +1,5 @@
 import type { NormalizedSourceConfig } from '../types'
+import { isIpLiteral, isPublicShopifyAddress } from './network'
 
 export const shopifyCollectionPolicyDefaults = {
   minimumDelayMs: 1000, maxRequests: 3, maxRetries: 2, backoffBaseMs: 1000,
@@ -29,6 +30,18 @@ export function normalizeShopifyCatalogUrl(value: string): NormalizedSourceConfi
 
   if (url.username || url.password) {
     throw new Error('Catalog URL cannot include credentials')
+  }
+
+  if (url.port && url.port !== '443') {
+    throw new Error('Catalog URL must use HTTPS port 443')
+  }
+  if (url.hostname === 'localhost' || url.hostname.endsWith('.localhost')) {
+    throw new Error('Catalog URL cannot use a loopback or private-network host')
+  }
+  if (isIpLiteral(url.hostname)) {
+    const literal = url.hostname.replace(/^\[|\]$/gu, '')
+    const family = literal.includes(':') ? 6 : 4
+    if (!isPublicShopifyAddress(literal, family)) throw new Error('Catalog URL cannot use a loopback or private-network host')
   }
 
   const pathname = url.pathname.replace(/\/+$/u, '') || '/'

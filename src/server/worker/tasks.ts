@@ -4,7 +4,9 @@ import { getDatabase } from '../db/index.server'
 import { catalogSources } from '../db/schema/catalog-sources'
 import { collectionRunEvents, collectionRuns } from '../db/schema/catalog'
 import { persistCatalogSnapshot } from '../db/catalog-persistence.server'
-import { createShopifyCollectionRun, type ShopifyCollectionRun, type ShopifyHttpClient } from '../../modules/shopify/transport'
+import { createShopifyCollectionRun, ShopifyCollectionTransportError, type ShopifyCollectionRun, type ShopifyHttpClient } from '../../modules/shopify/transport'
+import { createSecureShopifyHttpClient, type ShopifyPinnedRequest, type ShopifyResolver } from '../../modules/shopify/network.server'
+import { normalizeShopifyCatalogUrl } from '../../modules/shopify/source-config'
 import { collectShopifySnapshot, type ShopifyCollectionPolicy } from '../../modules/shopify/collector'
 import robotsParser from 'robots-parser'
 import { shopifySourceConfigSchema } from '../../modules/shopify'
@@ -39,13 +41,15 @@ export interface CatalogCollectionTaskDependencies {
   accessPolicy?: (url: string) => Promise<boolean>
   run?: ShopifyCollectionRun
   http?: ShopifyHttpClient
+  resolver?: ShopifyResolver
+  request?: ShopifyPinnedRequest
   collectionEnabled?: boolean
   mediaEnabled?: boolean
 }
 
 export function createRobotsAccessPolicy(
   run: ShopifyCollectionRun,
-  http: typeof fetch = fetch,
+  http: ShopifyHttpClient = createSecureShopifyHttpClient(),
   userAgent = 'Hoardcore/0.1 (conservative catalog collector)',
   onRequest?: (requestCount: number, status?: number) => Promise<void> | void,
 ) {
@@ -60,11 +64,12 @@ export function createRobotsAccessPolicy(
       await onRequest?.(run.requests)
       const response = await http(`${origin}/robots.txt`, {
         headers: { accept: 'text/plain', 'user-agent': userAgent },
+        redirect: 'error',
         signal: AbortSignal.timeout(5000),
       })
       await onRequest?.(run.requests, response.status)
-      if (!response.ok) return false
-      const parser = robotsParser(`${origin}/robots.txt`, await response.text())
+      if (response.status < 200 || response.status >= 300) return false
+      const parser = robotsParser(`${origin}/robots.txt`, await new Response(response.body).text())
       cache.set(origin, parser)
       return parser.isAllowed(url, userAgent) === true
     } catch {
@@ -92,31 +97,43 @@ export async function runCatalogCollection(
   const [priorRun] = await db.select().from(collectionRuns).where(and(inArray(collectionRuns.status, ['succeeded', 'not_modified']), eq(collectionRuns.sourceId, source.id))).orderBy(desc(collectionRuns.completedAt)).limit(1)
   const [runRecord] = await db.update(collectionRuns).set({ status: 'running', startedAt: new Date() }).where(eq(collectionRuns.id, payload.runId)).returning()
   if (!runRecord) throw new Error(`Collection run ${payload.runId} was not found`)
-  if (source.moduleId !== 'shopify') {
-    throw new Error(`Collection module ${source.moduleId} is not implemented`)
-  }
-  const policy: ShopifyCollectionPolicy & { catalogUrl: string } =
-    shopifySourceConfigSchema.parse(source.config)
-  policy.maxRequests = runRecord.requestLimit
-  const run = dependencies.run ?? createShopifyCollectionRun(policy.maxRequests)
+  const run = dependencies.run ?? createShopifyCollectionRun(runRecord.requestLimit)
   async function log(message: string, requestCount = run.requests) {
     await db.insert(collectionRunEvents).values({ runId: payload.runId, message })
     await db.update(collectionRuns).set({ requestCount: String(requestCount) }).where(eq(collectionRuns.id, payload.runId))
   }
   try {
+    if (source.moduleId !== 'shopify') {
+      throw new Error(`Collection module ${source.moduleId} is not implemented`)
+    }
+    const persistedPolicy = shopifySourceConfigSchema.parse(source.config)
+    // Re-normalize persisted configuration too; registration validation alone
+    // must not be the only boundary protecting a manually altered database row.
+    const policy: ShopifyCollectionPolicy & { catalogUrl: string } = {
+      ...persistedPolicy,
+      catalogUrl: normalizeShopifyCatalogUrl(persistedPolicy.catalogUrl).config.catalogUrl as string,
+      maxRequests: runRecord.requestLimit,
+    }
     await log('Collection started. Checking source access policy.')
-    const accessPolicy = dependencies.accessPolicy ?? createRobotsAccessPolicy(run, fetch, policy.userAgent, async (requestCount, status) => {
+    const http = dependencies.http ?? createSecureShopifyHttpClient({ resolver: dependencies.resolver, request: dependencies.request })
+    const accessPolicy = dependencies.accessPolicy ?? createRobotsAccessPolicy(run, http, policy.userAgent, async (requestCount, status) => {
       await log(status === undefined ? 'Checking robots.txt.' : `robots.txt responded with HTTP ${status}.`, requestCount)
     })
     const catalogUrl = policy.catalogUrl
-    const initialCache = { etag: priorRun?.etag ?? undefined, lastModified: priorRun?.lastModified ?? undefined }
+  // A first-page validator cannot prove a previously paginated collection is
+  // unchanged: later pages may have changed independently. Fetch page one
+  // unconditionally in that case; we retain validators for known single-page
+  // snapshots where a 304 is a complete answer.
+  const initialCache = priorRun && priorRun.pageCount <= 1
+    ? { etag: priorRun.etag ?? undefined, lastModified: priorRun.lastModified ?? undefined }
+    : undefined
     const observedAt = new Date()
     const result = await collectShopifySnapshot({
       catalogUrl,
       sourceKey: source.sourceKey,
       cache: initialCache,
       policy,
-      http: dependencies.http ?? ((url, init) => fetch(url, init)),
+      http,
       accessPolicy,
       run,
       observedAt: observedAt.toISOString(),
@@ -177,6 +194,23 @@ export async function runCatalogCollection(
     helpers.logger.info(`catalog.collect: ${source.id} completed`)
   } catch (error) {
     const requestCount = run.requests
+    if (error instanceof ShopifyCollectionTransportError && error.kind === 'retry_after' && error.retryAfterMs !== undefined && helpers.addJob) {
+      const retryAt = new Date(Date.now() + error.retryAfterMs)
+      try {
+        await helpers.addJob('catalog.collect', payload, { runAt: retryAt, maxAttempts: 1 })
+        await db.update(collectionRuns).set({
+          status: 'queued', requestCount: String(requestCount),
+          error: `Deferred until ${retryAt.toISOString()} after source Retry-After.`,
+          completedAt: null,
+        }).where(eq(collectionRuns.id, payload.runId))
+        await db.update(catalogSources).set({ status: 'active', updatedAt: new Date() }).where(eq(catalogSources.id, source.id))
+        await log(`Source requested Retry-After; collection deferred until ${retryAt.toISOString()}.`, requestCount)
+        helpers.logger.info(`catalog.collect: ${source.id} deferred until ${retryAt.toISOString()}`)
+        return
+      } catch (deferError) {
+        helpers.logger.info(`catalog.collect: ${source.id} could not defer source Retry-After: ${String(deferError)}`)
+      }
+    }
     try {
       await db.update(collectionRuns).set({ status: 'failed', requestCount: String(requestCount), error: error instanceof Error ? error.message : String(error), completedAt: new Date() }).where(eq(collectionRuns.id, payload.runId))
       await db.update(catalogSources).set({ status: 'error', updatedAt: new Date() }).where(eq(catalogSources.id, source.id))

@@ -65,6 +65,29 @@ describe('Shopify collection snapshot orchestration', () => {
     expect(result).toEqual({ status: 'not_modified', cache, requestCount: 1 })
   })
 
+  it('continues from cached page one after a 304 when it may have later pages', async () => {
+    const cachedFirstPage = { products: Array.from({ length: 250 }, (_, index) => product(index + 1)) }
+    const secondPage = { products: [product(251)] }
+    const http = vi.fn()
+      .mockResolvedValueOnce({ status: 304, headers: {}, json: async () => ({}) })
+      .mockResolvedValueOnce(response(secondPage))
+
+    const result = await collectShopifySnapshot({
+      catalogUrl: 'https://store.invalid/collections/sale',
+      sourceKey: 'store.invalid/collections/sale',
+      cache: { etag: '"cached"', payload: cachedFirstPage },
+      policy,
+      http,
+      accessPolicy: async () => true,
+      sleep: async () => {},
+    })
+
+    expect(result).toMatchObject({ status: 'ok', requestCount: 2, pageCount: 2, productCount: 251 })
+    if (result.status === 'not_modified') throw new Error('Expected a snapshot')
+    expect(result.records).toHaveLength(251)
+    expect(http.mock.calls[1]?.[0]).toContain('page=2')
+  })
+
   it('retains raw blank optional fields as evidence while normalizing them away', async () => {
     const result = await collectShopifySnapshot({
       catalogUrl: 'https://store.invalid/collections/sale',
