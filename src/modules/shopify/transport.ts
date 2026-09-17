@@ -5,6 +5,7 @@ export interface ShopifyHttpResponse {
   headers: Headers | Readonly<Record<string, string | undefined>>
   body?: ReadableStream<Uint8Array> | null
   json(): Promise<unknown>
+  text?(): Promise<string>
 }
 
 export type ShopifyHttpClient = (url: string, init: {

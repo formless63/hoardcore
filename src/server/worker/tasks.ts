@@ -8,6 +8,7 @@ import { createShopifyCollectionRun, ShopifyCollectionTransportError, type Shopi
 import { createSecureShopifyHttpClient, type ShopifyPinnedRequest, type ShopifyResolver } from '../../modules/shopify/network.server'
 import { normalizeShopifyCatalogUrl } from '../../modules/shopify/source-config'
 import { collectShopifySnapshot, type ShopifyCollectionPolicy } from '../../modules/shopify/collector'
+import { collectShopifyStockSupplement, shopifyStockEvidencePagesSchema } from '../../modules/shopify/stock-collector'
 import robotsParser from 'robots-parser'
 import { shopifySourceConfigSchema } from '../../modules/shopify'
 import { runMediaCapture } from '~/features/media/capture.server'
@@ -142,7 +143,7 @@ export async function runCatalogCollection(
   // unchanged: later pages may have changed independently. Fetch page one
   // unconditionally in that case; we retain validators for known single-page
   // snapshots where a 304 is a complete answer.
-  const initialCache = priorRun && priorRun.pageCount <= 1
+  const initialCache = !persistedPolicy.stockCardsEnabled && priorRun && priorRun.pageCount <= 1
     ? { etag: priorRun.etag ?? undefined, lastModified: priorRun.lastModified ?? undefined }
     : undefined
     const observedAt = runRecord.observedAt ?? new Date()
@@ -190,11 +191,37 @@ export async function runCatalogCollection(
     })
 
     if (result.status !== 'not_modified') {
-      await log(`Saving ${result.records.length} listings from ${result.pageCount} fetched pages${result.status === 'partial' ? ' (incomplete collection)' : ''}.`)
-      const persisted = await persistCatalogSnapshot(db, source.id, result.records, {
+      let records = result.records
+      let evidencePayload: unknown = result.evidencePayload
+      if (persistedPolicy.stockCardsEnabled) {
+        const checkpointPages = shopifyStockEvidencePagesSchema.parse(runRecord.supplementPages)
+        const stock = await collectShopifyStockSupplement({
+          catalogUrl, records, pageCount: result.pageCount, checkpointPages,
+          http, run, accessPolicy, userAgent: policy.userAgent, minimumDelayMs: policy.minimumDelayMs,
+          onEvent: async (event) => {
+            if (event.type === 'request_started') {
+              await db.update(collectionRuns).set({ minimumAllowedAt: new Date(Date.now() + policy.minimumDelayMs) }).where(eq(collectionRuns.id, payload.runId))
+            }
+            await log(event.type === 'request_started'
+              ? `Request ${event.requestCount} of ${run.maxRequests}: fetching stock-card collection page ${event.page}.`
+              : `Stock-card collection page ${event.page} responded with HTTP ${event.status}.`, event.requestCount)
+          },
+          onPage: async (page) => {
+            checkpointPages.push(page)
+            await db.update(collectionRuns).set({ supplementPages: checkpointPages as JsonValue[], requestCount: String(run.requests) }).where(eq(collectionRuns.id, payload.runId))
+            await log(`Stock-card page ${page.page} captured as timestamped HTML evidence.`)
+          },
+        })
+        records = stock.records
+        evidencePayload = { ...(result.evidencePayload as { pages: unknown[] }), stockPages: stock.pages }
+        if (stock.incomplete) await log(`Stock-card supplement stopped; unknown quantities remain unknown: ${stock.incomplete}`)
+      }
+      await log(`Saving ${records.length} listings from ${result.pageCount} fetched pages${result.status === 'partial' ? ' (incomplete collection)' : ''}.`)
+      const persisted = await persistCatalogSnapshot(db, source.id, records, {
         runId: payload.runId,
         observedAt,
-        evidence: { payload: result.evidencePayload, contentType: 'application/json' },
+        complete: result.status === 'ok',
+        evidence: { payload: evidencePayload, contentType: 'application/json' },
       })
       if (persisted.length && helpers.addJob) {
         try {
@@ -206,7 +233,7 @@ export async function runCatalogCollection(
     }
     await db.update(collectionRuns).set({
       status: result.status === 'ok' ? 'succeeded' : result.status,
-      requestCount: String(result.requestCount),
+      requestCount: String(run.requests),
       pageCount: result.status === 'not_modified' ? 0 : result.pageCount,
       productCount: result.status === 'not_modified' ? 0 : result.productCount,
       error: result.status === 'partial' && result.incomplete?.kind === 'invalid_page'
@@ -216,6 +243,7 @@ export async function runCatalogCollection(
       lastModified: result.cache.lastModified,
       completedAt: new Date(),
       evidencePages: [],
+      supplementPages: [],
       nextAllowedAt: null,
       minimumAllowedAt: null,
       retryAfterUntil: null,

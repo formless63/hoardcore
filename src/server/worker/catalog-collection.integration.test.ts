@@ -2,7 +2,7 @@ import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { normalizeShopifyCatalogUrl } from '~/modules/shopify/source-config'
 import { closeDatabase, getDatabase } from '../db/index.server'
-import { catalogSources, collectionRunEvents, collectionRuns } from '../db/schema'
+import { catalogSources, collectionRunEvents, collectionRuns, sourceEvidence, sourceListingCurrent, sourceListingObservations, sourceListings } from '../db/schema'
 import { runCatalogCollection } from './tasks'
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL
@@ -17,6 +17,38 @@ describe.skipIf(!testDatabaseUrl)('catalog collection worker safety', () => {
   })
 
   afterAll(async () => { await closeDatabase() })
+
+  it('persists opt-in card counts and timestamped HTML evidence without guessing other variants', async () => {
+    const normalized = normalizeShopifyCatalogUrl(`https://fixture-${crypto.randomUUID()}.invalid/collections/sale`)
+    const [source] = await getDatabase().insert(catalogSources).values({
+      moduleId: 'shopify', displayName: 'Stock fixture', sourceKey: normalized.sourceKey,
+      config: { ...normalized.config, stockCardsEnabled: true },
+    }).returning({ id: catalogSources.id })
+    sourceId = source.id
+    const [run] = await getDatabase().insert(collectionRuns).values({ sourceId, requestLimit: 2 }).returning({ id: collectionRuns.id })
+    const http = vi.fn(async (url: string) => url.includes('products.json')
+      ? new Response(JSON.stringify({ products: [{ id: 1, title: 'Fixture', handle: 'fixture', variants: [
+        { id: 10, price: '1.00', available: true }, { id: 11, price: '1.00', available: true },
+      ] }] }), { headers: { 'content-type': 'application/json' } })
+      : new Response('<div class="product-item" id="product-1"><form class="variants"><input name="id" value="10"></form><div class="product-bottom"><div class="product-inventory"><span>7 In stock</span></div></div></div>',
+        { headers: { 'content-type': 'text/html' } }))
+    await runCatalogCollection({ sourceId, runId: run.id }, { logger: { info: vi.fn() } }, {
+      collectionEnabled: true, accessPolicy: async () => true, http,
+    })
+    const current = await getDatabase().select({ stock: sourceListingCurrent.stockQuantity }).from(sourceListingCurrent)
+      .innerJoin(sourceListings, eq(sourceListings.id, sourceListingCurrent.listingId)).where(eq(sourceListings.sourceId, source.id))
+    const observations = await getDatabase().select({ stock: sourceListingObservations.stockQuantity }).from(sourceListingObservations)
+      .innerJoin(sourceListings, eq(sourceListings.id, sourceListingObservations.listingId)).where(eq(sourceListings.sourceId, source.id))
+    const [evidence] = await getDatabase().select().from(sourceEvidence).where(eq(sourceEvidence.runId, run.id))
+    const [recorded] = await getDatabase().select().from(collectionRuns).where(eq(collectionRuns.id, run.id))
+    expect(current.map((row) => row.stock).sort()).toEqual([7, null].sort())
+    expect(observations.map((row) => row.stock).sort()).toEqual([7, null].sort())
+    expect((evidence?.payload as { stockPages: { html: string; capturedAt: string }[] }).stockPages[0]).toMatchObject({
+      html: expect.stringContaining('7 In stock'), capturedAt: expect.any(String),
+    })
+    expect(recorded).toMatchObject({ status: 'succeeded', requestCount: '2' })
+    expect(http).toHaveBeenCalledTimes(2)
+  })
 
   it('persists a resumed checkpoint as one snapshot without repeating page one', async () => {
     const normalized = normalizeShopifyCatalogUrl(`https://fixture-${crypto.randomUUID()}.invalid/collections/sale`)

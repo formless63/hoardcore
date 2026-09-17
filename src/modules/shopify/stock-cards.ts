@@ -7,6 +7,22 @@ export interface ShopifyStockCard {
   quantity: number
 }
 
+/** Keep only card identifiers and inventory markup; public pages may contain unrelated session data. */
+export function retainShopifyStockEvidenceHtml(html: string): string {
+  const $ = load(html)
+  return $('.product-item[id^="product-"]').toArray().map((element) => {
+    const card = $(element)
+    const id = card.attr('id') ?? ''
+    if (!/^product-\d+$/u.test(id)) return ''
+    const variants = card.find('form.variants input[name="id"]').toArray().map((input) => {
+      const value = $(input).attr('value') ?? ''
+      return /^\d+$/u.test(value) ? `<input name="id" value="${value}">` : ''
+    }).join('')
+    const inventory = card.find('.product-bottom .product-inventory span').first().text()
+    return `<div class="product-item" id="${id}"><form class="variants">${variants}</form><div class="product-bottom"><div class="product-inventory"><span>${inventory.replaceAll('&', '&amp;').replaceAll('<', '&lt;')}</span></div></div></div>`
+  }).filter(Boolean).join('\n')
+}
+
 /**
  * Read numeric inventory only when the card exposes both Shopify identities.
  * Product-card position, title, and SKU are not safe join keys.

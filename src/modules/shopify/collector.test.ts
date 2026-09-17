@@ -40,6 +40,17 @@ describe('Shopify collection snapshot orchestration', () => {
     expect(http).toHaveBeenCalledOnce()
     expect(http.mock.calls[0]?.[0]).toContain('page=2')
   })
+  it('does not fetch a phantom next page after a terminal page checkpoint', async () => {
+    const http = vi.fn()
+    const run = createShopifyCollectionRun(2)
+    run.requests = 1
+    const result = await collectShopifySnapshot({ catalogUrl: 'https://store.invalid', sourceKey: 'store.invalid',
+      policy, http, accessPolicy: async () => true, run,
+      checkpoint: { pages: [{ products: [product(1)] }] },
+    })
+    expect(result).toMatchObject({ status: 'ok', requestCount: 1, pageCount: 1, productCount: 1 })
+    expect(http).not.toHaveBeenCalled()
+  })
   it('merges sequential pages and retains first-page cache metadata', async () => {
     const firstPage = { products: Array.from({ length: 250 }, (_, index) => product(index + 1)) }
     const secondPage = { products: [product(251)] }

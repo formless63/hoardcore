@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeShopifyCollection, parseShopifyCollection } from './contracts'
-import { enrichShopifyRecordsWithStock, parseShopifyStockCards } from './stock-cards'
+import { enrichShopifyRecordsWithStock, parseShopifyStockCards, retainShopifyStockEvidenceHtml } from './stock-cards'
 
 const catalogUrl = 'https://store.invalid/collections/clearance'
 const card = `<div class="inner product-item on-sale" id="product-6547337674833">
@@ -26,6 +26,15 @@ describe('Shopify storefront stock cards', () => {
     expect(parseShopifyStockCards(card)).toEqual([{
       productId: '6547337674833', variantId: '39284681080913', quantity: 103,
     }])
+  })
+
+  it('retains only raw stock-card identity and count markup, not unrelated page secrets', () => {
+    const retained = retainShopifyStockEvidenceHtml(`<script>sessionToken=secret</script>${card}<div>private</div>`)
+    expect(retained).toContain('103 In stock')
+    expect(retained).toContain('39284681080913')
+    expect(retained).not.toContain('sessionToken')
+    expect(retained).not.toContain('private')
+    expect(parseShopifyStockCards(retained)).toEqual(parseShopifyStockCards(card))
   })
 
   it('joins by both identities and leaves other variants unknown', () => {
