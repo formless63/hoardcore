@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { eq, inArray, like } from 'drizzle-orm'
 import type { NormalizedCatalogRecord } from '~/modules/types'
-import { getCatalogListingDetail, getCatalogListingEvidencePayload } from './catalog-detail.server'
+import { getCatalogListingDetail, getCatalogListingEvidencePayload, getCatalogListingObservations } from './catalog-detail.server'
 import { loadResearchExportRows } from './catalog-research-export.server'
 import { persistCatalogSnapshot } from './catalog-persistence.server'
 import { closeDatabase, getDatabase } from './index.server'
@@ -72,6 +72,7 @@ describeWithDatabase('catalog snapshot persistence and listing history', () => {
     expect(detail?.observations[0]?.compareAtPrice).toBe('44.00')
     expect(detail?.observations[0]?.stockQuantity).toBe(9)
     expect(detail?.observations).toHaveLength(2)
+    expect(detail?.observationsHasMore).toBe(false)
     expect(detail?.observations[0]?.observedAt.toISOString()).toBe('2026-09-16T07:00:00.000Z')
     expect(detail?.observations[1]?.evidence?.run?.id).toBe(runId)
     expect(detail?.observations[1]?.evidence).not.toHaveProperty('payload')
@@ -81,6 +82,11 @@ describeWithDatabase('catalog snapshot persistence and listing history', () => {
     expect(researchRows[0]?.evidenceId).toBeNull() // latest observation had no evidence
     expect(researchRows[0]).not.toHaveProperty('evidence')
     await expect(loadResearchExportRows(db(), [listing[0]!.id, listing[0]!.id])).rejects.toThrow('only once')
+    const firstPage = await getCatalogListingObservations(db(), listing[0]!.id, undefined, 1)
+    expect(firstPage.hasMore).toBe(true)
+    const secondPage = await getCatalogListingObservations(db(), listing[0]!.id, { observedAt: firstPage.items[0]!.observedAt, id: firstPage.items[0]!.id }, 1)
+    expect(secondPage.items.map((item) => item.id)).toEqual([detail!.observations[1]!.id])
+    expect(secondPage.hasMore).toBe(false)
   })
 
   it('is idempotent when a durable collection run is retried', async () => {

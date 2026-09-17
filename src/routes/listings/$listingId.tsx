@@ -1,8 +1,8 @@
 import { Await, createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { getPublicSession } from '~/features/auth/auth.functions'
-import { getListingDetail, getListingEvidencePayload } from '~/features/catalog/listing-detail.functions'
+import { getListingDetail, getListingEvidencePayload, getListingObservationPage } from '~/features/catalog/listing-detail.functions'
 import type { ListingDetail } from '~/features/catalog/listing-detail.schemas'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useServerFn } from '@tanstack/react-start'
 import { ListingDetailPending, ListingLoadError } from '~/features/catalog/listing-load-state'
 import { CachedListingImage } from '~/features/media/cached-listing-image'
@@ -79,6 +79,31 @@ function Observation({ listingId, observation }: { listingId: string; observatio
 function ListingDetailPage() {
   const { detail, supplement } = Route.useLoaderData()
   const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null)
+  const [observations, setObservations] = useState(detail?.observations ?? [])
+  const [hasMoreObservations, setHasMoreObservations] = useState(detail?.observationsHasMore ?? false)
+  const [loadingObservations, setLoadingObservations] = useState(false)
+  const [observationError, setObservationError] = useState(false)
+  const getObservationPage = useServerFn(getListingObservationPage)
+  useEffect(() => {
+    setObservations(detail?.observations ?? [])
+    setHasMoreObservations(detail?.observationsHasMore ?? false)
+    setObservationError(false)
+  }, [detail?.id, detail?.observations[0]?.id])
+  async function loadOlderObservations() {
+    const oldest = observations.at(-1)
+    if (!detail || !oldest || loadingObservations) return
+    setLoadingObservations(true)
+    setObservationError(false)
+    try {
+      const page = await getObservationPage({ data: { listingId: detail.id, before: { observedAt: oldest.observedAt.toISOString(), id: oldest.id } } })
+      setObservations((current) => {
+        const known = new Set(current.map((item) => item.id))
+        return [...current, ...page.items.filter((item) => !known.has(item.id))]
+      })
+      setHasMoreObservations(page.hasMore)
+    } catch { setObservationError(true) }
+    finally { setLoadingObservations(false) }
+  }
   if (!detail) return <main className="w-full px-2 py-3" id="main-content"><Link className="text-xs text-primary underline" to="/listings">← Listings</Link><p className="mt-3 text-sm">Listing not found.</p></main>
   const media = detail.mediaCaptures
   const activeMediaId = media.some((item) => item.id === selectedMediaId) ? selectedMediaId : media[0]?.id
@@ -96,6 +121,6 @@ function ListingDetailPage() {
     <OpportunityCalculator price={detail.current.price} currency={detail.current.currency} />
     <Await promise={supplement} fallback={null}>{({ decision }) => <ListingDecisionControl listingId={detail.id} initial={decision} />}</Await>
     <Await promise={supplement} fallback={<div aria-label="Loading research" className="mt-4 space-y-2"><div className="h-12 animate-pulse rounded bg-muted motion-reduce:animate-none" /><div className="h-12 animate-pulse rounded bg-muted motion-reduce:animate-none" /></div>}>{({ comparables, history }) => <><ResearchComparableSummary comparables={comparables} /><ResearchHistoryPanel history={history} /></>}</Await>
-    <section className="mt-5" aria-label="Listing observations and evidence"><h2 className="text-sm font-medium text-foreground">Observation history ({detail.observations.length})</h2>{detail.observations.length ? <div className="mt-2">{detail.observations.map((observation) => <Observation key={observation.id} listingId={detail.id} observation={observation} />)}</div> : <p className="mt-2 text-xs text-muted-foreground">No observations recorded yet.</p>}</section>
+    <section className="mt-5" aria-label="Listing observations and evidence"><h2 className="text-sm font-medium text-foreground">Observation history ({observations.length}{hasMoreObservations ? '+' : ''})</h2>{observations.length ? <div className="mt-2">{observations.map((observation) => <Observation key={observation.id} listingId={detail.id} observation={observation} />)}</div> : <p className="mt-2 text-xs text-muted-foreground">No observations recorded yet.</p>}{hasMoreObservations ? <button type="button" disabled={loadingObservations} onClick={() => void loadOlderObservations()} className="mt-2 rounded border border-border px-3 py-1.5 text-xs text-primary hover:bg-muted disabled:opacity-50">{loadingObservations ? 'Loading older observations…' : 'Load older observations'}</button> : null}{observationError ? <p className="mt-1 text-xs text-destructive" role="alert">Could not load older observations. Try again.</p> : null}</section>
   </main>
 }

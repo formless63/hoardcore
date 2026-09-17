@@ -20,6 +20,7 @@ export const listingDetailSchema = z.object({
   variant: z.object({ id: z.string(), title: optionalText, sku: optionalText, barcode: optionalText }),
   current: z.object({ title: z.string(), price: optionalText, compareAtPrice: optionalText, currency: optionalText, available: z.boolean(), stockQuantity: z.number().int().nullable(), observedAt: z.date() }),
   observations: z.array(listingObservationSchema),
+  observationsHasMore: z.boolean(),
 })
 
 export type ListingDetail = z.output<typeof listingDetailSchema>

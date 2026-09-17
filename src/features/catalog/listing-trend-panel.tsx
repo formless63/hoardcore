@@ -22,7 +22,7 @@ export function ListingTrends({ detail }: { detail: ListingDetail }) {
     catch { return value.toFixed(2) }
   }
   return <section className="mt-4 border-y border-border py-3" aria-label="Listing trends">
-    <div className="mb-3 flex items-baseline justify-between"><h2 className="text-sm font-medium">Trend</h2><span className="text-[11px] text-muted-foreground">Latest 80 observations</span></div>
+    <div className="mb-3 flex items-baseline justify-between"><h2 className="text-sm font-medium">Trend</h2><span className="text-[11px] text-muted-foreground">Recent known values</span></div>
     <div className="grid gap-3 sm:grid-cols-2"><Trend label="Source price" values={prices} formatter={money} /><Trend label="Reported stock" values={quantities} formatter={(value) => value.toLocaleString()} /></div>
   </section>
 }
