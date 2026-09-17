@@ -1,0 +1,1 @@
+ALTER TABLE "saved_listing_views" ADD COLUMN "presentation" jsonb DEFAULT '{"sorting":[],"pageSize":50}'::jsonb NOT NULL;

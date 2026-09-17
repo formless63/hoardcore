@@ -24,12 +24,14 @@ describeWithDatabase('saved listing views', () => {
   afterAll(async () => { await db().delete(user).where(inArray(user.id, [firstUserId, secondUserId])); await closeDatabase() })
 
   it('persists named versioned filters and scopes reads, updates, and deletion to the owner', async () => {
-    const first = await saveListingViewToDatabase(db(), firstUserId, 'Bargains', { ...emptyListingFilters, maxPrice: 100, minDiscountPercent: 30 })
+    const first = await saveListingViewToDatabase(db(), firstUserId, 'Bargains', { ...emptyListingFilters, maxPrice: 100, minDiscountPercent: 30 }, { sorting: [{ id: 'price', desc: true }], pageSize: 100 })
     expect((await listSavedViewsFromDatabase(db(), firstUserId))[0]?.filters.minDiscountPercent).toBe(30)
+    expect((await listSavedViewsFromDatabase(db(), firstUserId))[0]?.presentation).toEqual({ sorting: [{ id: 'price', desc: true }], pageSize: 100 })
     expect(await listSavedViewsFromDatabase(db(), secondUserId)).toEqual([])
-    const updated = await saveListingViewToDatabase(db(), firstUserId, 'Bargains', { ...emptyListingFilters, maxPrice: 80 })
+    const updated = await saveListingViewToDatabase(db(), firstUserId, 'Bargains', { ...emptyListingFilters, maxPrice: 80 }, { sorting: [], pageSize: 50 })
     expect(updated.id).toBe(first.id)
     expect((await listSavedViewsFromDatabase(db(), firstUserId))[0]?.filters.maxPrice).toBe(80)
+    expect((await listSavedViewsFromDatabase(db(), firstUserId))[0]?.presentation.pageSize).toBe(50)
     expect(await deleteListingViewFromDatabase(db(), secondUserId, first.id)).toEqual({ deleted: false })
     expect(await deleteListingViewFromDatabase(db(), firstUserId, first.id)).toEqual({ deleted: true })
     expect(await listSavedViewsFromDatabase(db(), firstUserId)).toEqual([])

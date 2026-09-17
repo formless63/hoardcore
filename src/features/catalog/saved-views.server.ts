@@ -2,15 +2,19 @@ import { and, asc, eq } from 'drizzle-orm'
 import type { Database } from '~/server/db/db.server'
 import { savedListingViews } from '~/server/db/schema'
 import { listingFiltersSchema, type ListingFilters } from './listing-filters'
+import { listingPresentationSchema } from './listing-workbench-state'
+import type { z } from 'zod'
+
+type ListingPresentation = z.output<typeof listingPresentationSchema>
 
 export async function listSavedViewsFromDatabase(db: Database, userId: string) {
   const rows = await db.select().from(savedListingViews).where(eq(savedListingViews.userId, userId)).orderBy(asc(savedListingViews.name))
-  return rows.map((row) => ({ id: row.id, name: row.name, filters: listingFiltersSchema.parse(row.filters) }))
+  return rows.map((row) => ({ id: row.id, name: row.name, filters: listingFiltersSchema.parse(row.filters), presentation: listingPresentationSchema.parse(row.presentation) }))
 }
 
-export async function saveListingViewToDatabase(db: Database, userId: string, name: string, filters: ListingFilters) {
-  const [row] = await db.insert(savedListingViews).values({ userId, name, filters })
-    .onConflictDoUpdate({ target: [savedListingViews.userId, savedListingViews.name], set: { filters, updatedAt: new Date() } })
+export async function saveListingViewToDatabase(db: Database, userId: string, name: string, filters: ListingFilters, presentation: ListingPresentation) {
+  const [row] = await db.insert(savedListingViews).values({ userId, name, filters, presentation })
+    .onConflictDoUpdate({ target: [savedListingViews.userId, savedListingViews.name], set: { filters, presentation, updatedAt: new Date() } })
     .returning({ id: savedListingViews.id })
   return { id: row.id }
 }

@@ -1,7 +1,8 @@
 import { createColumnHelper, createSortedRowModel, rowSortingFeature, tableFeatures, useTable, type SortingState } from '@tanstack/react-table'
 import { Link, useNavigate, useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useDebouncer } from '@tanstack/react-pacer'
 import { createResearchExport } from './catalog.functions'
 import type { CurrentListing } from './catalog.schemas'
 import { emptyListingFilters, listingDiscount, listingFiltersSchema, matchesListingFilters, type ListingFilters } from './listing-filters'
@@ -15,7 +16,7 @@ import { displayListingTitle } from './display-listing-title'
 import { imagePreviewPosition } from './image-preview-position'
 import { categoryGroups, unmappedCategoryGroup } from './category-groups'
 import { listingPriceSortValue } from './listing-sort-values'
-import { type listingWorkbenchSearchSchema } from './listing-workbench-state'
+import { type listingPresentationSchema, type listingWorkbenchSearchSchema } from './listing-workbench-state'
 import type { z } from 'zod'
 
 const features = tableFeatures({ rowSortingFeature, sortedRowModel: createSortedRowModel() })
@@ -81,7 +82,7 @@ function FilterSelect({ label, value, values, onChange }: { label: string; value
   return <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} className="h-8 max-w-48 rounded border border-border bg-background px-1.5 text-xs text-foreground"><option value="">All {label.toLowerCase()}</option>{values.map((item) => <option key={item} value={item}>{item}</option>)}</select>
 }
 
-type SavedView = { id: string; name: string; filters: ListingFilters }
+type SavedView = { id: string; name: string; filters: ListingFilters; presentation: z.output<typeof listingPresentationSchema> }
 
 function NumberFilter({ label, value, onChange, max = 1_000_000_000 }: { label: string; value: number | null; onChange: (value: number | null) => void; max?: number }) {
   return <label className="flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">{label}<input aria-label={label} type="number" min="0" max={max} step="any" value={value ?? ''} onChange={(event) => onChange(event.target.value === '' ? null : Number(event.target.value))} className="h-8 w-20 rounded border border-border bg-background px-1.5 text-xs text-foreground" /></label>
@@ -91,6 +92,7 @@ type ListingWorkbench = z.output<typeof listingWorkbenchSearchSchema>
 
 export function CurrentListingsTable({ listings, savedViews, watchedListingIds = [], researchSummaries = {}, workbench }: { listings: CurrentListing[]; savedViews: SavedView[]; watchedListingIds?: string[]; researchSummaries?: ResearchSummariesByListing; workbench: ListingWorkbench }) {
   const filters = workbench.filters
+  const [queryDraft, setQueryDraft] = useState(filters.query)
   const [selectedViewId, setSelectedViewId] = useState('')
   const [viewName, setViewName] = useState('')
   const [viewBusy, setViewBusy] = useState(false)
@@ -102,6 +104,10 @@ export function CurrentListingsTable({ listings, savedViews, watchedListingIds =
   const [hoveredMedia, setHoveredMedia] = useState<{ id: string; left: number; top: number } | null>(null)
   const previewRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate({ from: '/listings/' })
+  const queryDebouncer = useDebouncer((value: string) => {
+    void navigate({ search: (current) => ({ ...current, filters: { ...current.filters, query: value }, page: 0 }) })
+  }, { wait: 250 })
+  useEffect(() => { setQueryDraft(filters.query) }, [filters.query])
   const watched = useMemo(() => new Set(watchedListingIds), [watchedListingIds])
   const options = useMemo(() => ({ categories: [...new Set(listings.map((item) => item.category).filter((value): value is string => Boolean(value)))].sort(), manufacturers: [...new Set(listings.map((item) => item.manufacturer).filter((value): value is string => Boolean(value)))].sort(), sources: [...new Map(listings.map((item) => [item.sourceId, item.sourceName])).entries()].sort((a, b) => a[1].localeCompare(b[1])) }), [listings])
   const groupCounts = useMemo(() => {
@@ -117,8 +123,10 @@ export function CurrentListingsTable({ listings, savedViews, watchedListingIds =
     : options.categories, [options.categories, filters.categoryGroup])
   const data = useMemo(() => listings.filter((item) => matchesListingFilters(item, filters)), [listings, filters])
   function updateFilter<K extends keyof ListingFilters>(key: K, value: ListingFilters[K]) {
+    queryDebouncer.cancel()
     const nextFilters = {
       ...filters,
+      query: queryDraft,
       [key]: value,
       ...(key === 'categoryGroup' && value && filters.category && !listings.some((listing) => listing.category === filters.category && listing.categoryGroup === value) ? { category: '' } : {}),
     }
@@ -137,15 +145,17 @@ export function CurrentListingsTable({ listings, savedViews, watchedListingIds =
   }
   function loadView(id: string) {
     const view = savedViews.find((item) => item.id === id)
+    queryDebouncer.cancel()
+    setQueryDraft(view?.filters.query ?? '')
     setSelectedViewId(view?.id ?? '')
     setViewName(view?.name ?? '')
-    void navigate({ search: (current) => ({ ...current, filters: view?.filters ?? emptyListingFilters, page: 0 }) })
+    void navigate({ search: (current) => ({ ...current, filters: view?.filters ?? emptyListingFilters, sorting: view?.presentation.sorting ?? [], pageSize: view?.presentation.pageSize ?? 50, page: 0 }) })
     setViewError('')
   }
   async function saveCurrentView() {
     setViewBusy(true); setViewError('')
     try {
-      const result = await saveView({ data: { name: viewName, filters: listingFiltersSchema.parse(filters) } })
+      const result = await saveView({ data: { name: viewName, filters: listingFiltersSchema.parse(filters), presentation: { sorting: workbench.sorting, pageSize: workbench.pageSize } } })
       setSelectedViewId(result.id)
       await router.invalidate({ sync: true })
     } catch (error) { setViewError(error instanceof Error ? error.message : 'Could not save view') }
@@ -175,7 +185,7 @@ export function CurrentListingsTable({ listings, savedViews, watchedListingIds =
   return <div>
     {hoveredMedia ? <div ref={previewRef} className="pointer-events-none fixed z-50 flex size-64 max-h-[calc(100vh-16px)] max-w-[calc(100vw-16px)] items-center justify-center rounded border border-border bg-card p-2 shadow-xl" style={{ left: hoveredMedia.left, top: hoveredMedia.top }} role="img" aria-label="Larger captured listing image"><img src={mediaUrl(hoveredMedia.id, 'preview')} alt="" className="max-h-full max-w-full object-contain" /></div> : null}
     {selected.size ? <ExportPanel listingIds={[...selected]} onClear={() => setSelected(new Set())} /> : null}
-    <div className="mb-1 flex flex-wrap items-center gap-1.5"><div className="w-full shrink-0 sm:w-72 lg:w-80"><Input aria-label="Search current listings" className="h-8 text-xs" placeholder="Search title, SKU, tag…" value={filters.query} onChange={(event) => updateFilter('query', event.target.value)} /></div><select aria-label="Category groups" value={filters.categoryGroup} onChange={(event) => updateFilter('categoryGroup', event.target.value)} className="h-8 max-w-56 rounded border border-border bg-background px-1.5 text-xs text-foreground"><option value="">All groups</option>{categoryGroups.map((group) => <option key={group.id} value={group.id}>{group.label} ({groupCounts.get(group.id) ?? 0})</option>)}<option value={unmappedCategoryGroup.id}>{unmappedCategoryGroup.label} ({groupCounts.get(unmappedCategoryGroup.id) ?? 0})</option></select><FilterSelect label="Categories" value={filters.category} values={visibleCategories} onChange={(value) => updateFilter('category', value)} /><FilterSelect label="Manufacturers" value={filters.manufacturer} values={options.manufacturers} onChange={(value) => updateFilter('manufacturer', value)} /><select aria-label="Sources" value={filters.sourceId} onChange={(event) => updateFilter('sourceId', event.target.value)} className="h-8 max-w-48 rounded border border-border bg-background px-1.5 text-xs text-foreground"><option value="">All sources</option>{options.sources.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select><select aria-label="Stock" value={filters.stock} onChange={(event) => updateFilter('stock', event.target.value as ListingFilters['stock'])} className="h-8 rounded border border-border bg-background px-1.5 text-xs text-foreground"><option value="all">All stock</option><option value="in">In stock</option><option value="out">Out</option></select><span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">{rows.length.toLocaleString()} listings</span></div>
+    <div className="mb-1 flex flex-wrap items-center gap-1.5"><div className="w-full shrink-0 sm:w-72 lg:w-80"><Input aria-label="Search current listings" className="h-8 text-xs" placeholder="Search title, SKU, tag…" value={queryDraft} onChange={(event) => { setQueryDraft(event.target.value); queryDebouncer.maybeExecute(event.target.value) }} onBlur={() => queryDebouncer.flush()} onKeyDown={(event) => { if (event.key === 'Enter') queryDebouncer.flush() }} /></div><select aria-label="Category groups" value={filters.categoryGroup} onChange={(event) => updateFilter('categoryGroup', event.target.value)} className="h-8 max-w-56 rounded border border-border bg-background px-1.5 text-xs text-foreground"><option value="">All groups</option>{categoryGroups.map((group) => <option key={group.id} value={group.id}>{group.label} ({groupCounts.get(group.id) ?? 0})</option>)}<option value={unmappedCategoryGroup.id}>{unmappedCategoryGroup.label} ({groupCounts.get(unmappedCategoryGroup.id) ?? 0})</option></select><FilterSelect label="Categories" value={filters.category} values={visibleCategories} onChange={(value) => updateFilter('category', value)} /><FilterSelect label="Manufacturers" value={filters.manufacturer} values={options.manufacturers} onChange={(value) => updateFilter('manufacturer', value)} /><select aria-label="Sources" value={filters.sourceId} onChange={(event) => updateFilter('sourceId', event.target.value)} className="h-8 max-w-48 rounded border border-border bg-background px-1.5 text-xs text-foreground"><option value="">All sources</option>{options.sources.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select><select aria-label="Stock" value={filters.stock} onChange={(event) => updateFilter('stock', event.target.value as ListingFilters['stock'])} className="h-8 rounded border border-border bg-background px-1.5 text-xs text-foreground"><option value="all">All stock</option><option value="in">In stock</option><option value="out">Out</option></select><span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">{rows.length.toLocaleString()} listings</span></div>
     <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-xs">{Object.entries({ Search: filters.query, Group: filters.categoryGroup, Category: filters.category, Maker: filters.manufacturer, Stock: filters.stock === 'all' ? '' : filters.stock }).filter(([, value]) => value).map(([label, value]) => <span key={label} className="rounded-full border border-border bg-muted px-2 py-0.5">{label}: {value}</span>)}{Object.values(filters).some((value) => value !== '' && value !== null && value !== 'all' && value !== 1) ? <button type="button" onClick={() => loadView('')} className="text-primary hover:underline">Clear filters</button> : null}<details className="ml-auto"><summary className="cursor-pointer rounded border border-border px-2 py-1">Saved views</summary><div className="absolute z-20 mt-1 flex flex-wrap gap-1 rounded border border-border bg-card p-2 shadow"><select aria-label="Saved views" value={selectedViewId} onChange={(event) => loadView(event.target.value)} className="h-8 max-w-48 rounded border border-border bg-background px-1.5"><option value="">Current filters</option>{savedViews.map((view) => <option key={view.id} value={view.id}>{view.name}</option>)}</select><Input aria-label="View name" className="h-8 w-32 text-xs" maxLength={80} placeholder="View name" value={viewName} onChange={(event) => setViewName(event.target.value)} /><button type="button" disabled={viewBusy || !viewName.trim()} onClick={() => void saveCurrentView()} className="h-8 rounded bg-primary px-2 text-primary-foreground disabled:opacity-50">Save</button>{selectedViewId ? <button type="button" disabled={viewBusy} onClick={() => void removeCurrentView()} className="h-8 rounded border border-border px-2 text-destructive">Delete</button> : null}{viewError ? <span role="alert" className="text-destructive">{viewError}</span> : null}</div></details><details className="w-full"><summary className="cursor-pointer text-muted-foreground">Advanced price and discount filters</summary><div className="mt-1 flex flex-wrap gap-x-2 gap-y-1"><NumberFilter label="Price min" value={filters.minPrice} onChange={(value) => updateFilter('minPrice', value)} /><NumberFilter label="Price max" value={filters.maxPrice} onChange={(value) => updateFilter('maxPrice', value)} /><NumberFilter label="Off min" value={filters.minDiscountAmount} onChange={(value) => updateFilter('minDiscountAmount', value)} /><NumberFilter label="Off max" value={filters.maxDiscountAmount} onChange={(value) => updateFilter('maxDiscountAmount', value)} /><NumberFilter label="Off % min" value={filters.minDiscountPercent} max={100} onChange={(value) => updateFilter('minDiscountPercent', value)} /><NumberFilter label="Off % max" value={filters.maxDiscountPercent} max={100} onChange={(value) => updateFilter('maxDiscountPercent', value)} /></div></details></div>
     <div className="mb-1 flex items-center gap-2 text-xs"><button type="button" className="rounded border border-border px-2 py-1" onClick={togglePageSelection}>{pageSelected ? 'Clear page' : 'Select page'}</button>{selected.size ? <button type="button" className="text-primary underline" onClick={() => setSelected(new Set())}>Clear selection</button> : null}</div><div className="overflow-x-auto border border-border"><table className="w-max min-w-full text-left text-xs font-normal"><thead className="sticky top-0 z-10 bg-muted text-muted-foreground"><tr>{table.getHeaderGroups()[0]?.headers.map((header) => { const sortable = header.column.getCanSort(); const direction = header.column.getIsSorted(); return <th aria-sort={direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : undefined} className={`whitespace-nowrap px-1.5 py-1.5 font-medium ${['price','compareAtPrice','discount','quantity'].includes(header.column.id) ? 'text-right' : ''} ${header.column.id === 'image' ? 'w-12 min-w-12' : ''}`} key={header.id}>{sortable ? <button className="hover:text-foreground" type="button" onClick={header.column.getToggleSortingHandler()}>{header.isPlaceholder ? null : <table.FlexRender header={header} />}{({ asc: ' ↑', desc: ' ↓' } as Record<string, string>)[direction as string] ?? ''}</button> : header.isPlaceholder ? null : <table.FlexRender header={header} />}</th>})}</tr></thead><tbody className="divide-y divide-border">{pageRows.map((row) => <tr className="hover:bg-muted/30" key={row.id}>{row.getAllCells().map((cell) => <td className={`whitespace-nowrap px-1.5 py-1 font-normal ${['price','compareAtPrice','discount','quantity'].includes(cell.column.id) ? 'text-right tabular-nums' : ''} ${cell.column.id === 'image' ? 'w-12 min-w-12' : ''}`} key={cell.id}><table.FlexRender cell={cell} /></td>)}</tr>)}</tbody></table></div>
     {rows.length === 0 ? <p className="py-6 text-center text-xs text-muted-foreground">No listings match these filters.</p> : <div className="mt-2 flex items-center justify-end gap-2 text-xs"><span className="text-muted-foreground">{safePage * workbench.pageSize + 1}–{Math.min((safePage + 1) * workbench.pageSize, rows.length)} of {rows.length}</span><button disabled={safePage === 0} onClick={() => void navigate({ search: (current) => ({ ...current, page: safePage - 1 }) })} className="rounded border border-border px-2 py-1 disabled:opacity-40">Previous</button><button disabled={safePage >= pageCount - 1} onClick={() => void navigate({ search: (current) => ({ ...current, page: safePage + 1 }) })} className="rounded border border-border px-2 py-1 disabled:opacity-40">Next</button><select aria-label="Rows per page" value={workbench.pageSize} onChange={(event) => void navigate({ search: (current) => ({ ...current, pageSize: Number(event.target.value) as 50 | 100 | 200, page: 0 }) })} className="rounded border border-border bg-background px-1 py-1">{pageSizes.map((size) => <option key={size} value={size}>{size}/page</option>)}</select></div>}

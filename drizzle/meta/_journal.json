@@ -85,6 +85,13 @@
       "when": 1789623018430,
       "tag": "0011_silky_gladiator",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1789624057144,
+      "tag": "0012_even_mandroid",
+      "breakpoints": true
     }
   ]
 }
