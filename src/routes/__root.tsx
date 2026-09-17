@@ -61,8 +61,8 @@ function RootDocument({ children }: { children: ReactNode }) {
               Skip to content
             </a>
             {!isLoginPage ? <header className="sticky top-0 z-40 border-b border-border bg-card/90 backdrop-blur">
-              <div className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 px-2 py-1 sm:flex-nowrap sm:px-3">
-                <div className="flex min-w-0 items-center gap-3">
+              <div className="mx-auto flex w-full max-w-[1800px] flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2 sm:flex-nowrap sm:px-5">
+                <div className="flex min-w-0 items-center">
                   <Link
                     to="/"
                     aria-label="Hoardcore overview"
@@ -73,48 +73,48 @@ function RootDocument({ children }: { children: ReactNode }) {
                 </div>
                 <nav
                   aria-label="Primary navigation"
-                  className="order-3 flex w-full items-center gap-1 sm:order-none sm:w-auto sm:flex-1"
+                  className="order-3 flex w-full gap-1 overflow-x-auto pb-0.5 sm:order-none sm:w-auto sm:flex-1 sm:pb-0"
                 >
                   <Link
                     to="/"
                     activeOptions={{ exact: true }}
-                    className="rounded-md px-2 py-1 text-xs text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:bg-accent [&[data-status=active]]:text-accent-foreground"
+                    className="shrink-0 rounded-sm border border-transparent px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-border hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:border-primary/40 [&[data-status=active]]:bg-primary/10 [&[data-status=active]]:text-foreground"
                   >
                     Overview
                   </Link>
                   <Link
                     to="/sources"
-                    className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:bg-accent [&[data-status=active]]:text-accent-foreground"
+                    className="shrink-0 rounded-sm border border-transparent px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-border hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:border-primary/40 [&[data-status=active]]:bg-primary/10 [&[data-status=active]]:text-foreground"
                   >
                     Sources
                   </Link>
                   <Link
                     to="/listings"
-                    className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:bg-accent [&[data-status=active]]:text-accent-foreground"
+                    className="shrink-0 rounded-sm border border-transparent px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-border hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:border-primary/40 [&[data-status=active]]:bg-primary/10 [&[data-status=active]]:text-foreground"
                   >
                     Listings
                   </Link>
                   <Link
                     to="/watchlist"
-                    className="rounded-md px-2 py-1 text-xs text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:bg-accent [&[data-status=active]]:text-accent-foreground"
+                    className="shrink-0 rounded-sm border border-transparent px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-border hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:border-primary/40 [&[data-status=active]]:bg-primary/10 [&[data-status=active]]:text-foreground"
                   >
                     Watchlist
                   </Link>
                   <Link
                     to="/research/preview"
-                    className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:bg-accent [&[data-status=active]]:text-accent-foreground"
+                    className="shrink-0 rounded-sm border border-transparent px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-border hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:border-primary/40 [&[data-status=active]]:bg-primary/10 [&[data-status=active]]:text-foreground"
                   >
                     Research
                   </Link>
-                  <Link to="/settings" className="rounded-md px-2 py-1 text-xs text-muted-foreground transition hover:bg-accent hover:text-accent-foreground [&[data-status=active]]:bg-accent [&[data-status=active]]:text-accent-foreground">Settings</Link>
+                  <Link to="/settings" className="shrink-0 rounded-sm border border-transparent px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-border hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:border-primary/40 [&[data-status=active]]:bg-primary/10 [&[data-status=active]]:text-foreground">Settings</Link>
                 </nav>
-                <div className="flex items-center gap-3">
+                <div className="ml-auto flex shrink-0 items-center gap-2">
                   {session.data ? (
-                    <button className="text-sm text-muted-foreground hover:text-foreground" onClick={() => void authClient.signOut()} type="button">
+                    <button className="rounded-sm px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring" onClick={() => void authClient.signOut()} type="button">
                       Sign out
                     </button>
                   ) : (
-                    <Link className="text-sm text-muted-foreground hover:text-foreground" to="/login">Sign in</Link>
+                    <Link className="rounded-sm px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring" to="/login">Sign in</Link>
                   )}
                   <ThemeControls />
                 </div>

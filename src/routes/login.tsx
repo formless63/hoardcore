@@ -6,6 +6,7 @@ import { GlyphMatrix } from '~/components/magicui/glyph-matrix'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { ThemeModeToggle } from '~/components/themes/theme-mode-toggle'
+import { HoardcoreWordmark } from '~/components/brand/hoardcore-wordmark'
 import { authClient } from '~/lib/auth-client'
 import { getPublicLoginConfig } from '~/server/auth-public.functions'
 
@@ -59,12 +60,12 @@ function LoginPage() {
   }
 
   return (
-    <main className="relative isolate flex min-h-dvh items-center justify-center overflow-hidden px-4 py-10" id="main-content">
+    <main className="relative isolate flex min-h-dvh items-center justify-center overflow-hidden px-4 py-6 sm:px-6" id="main-content">
       <GlyphMatrix className="absolute inset-0 -z-20" />
       <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-background/30 via-background/70 to-background" />
-      <section className="w-full max-w-[430px] rounded-2xl border border-border bg-card/95 p-6 shadow-2xl shadow-foreground/10 backdrop-blur-md sm:p-8" aria-labelledby="login-heading">
-        <div className="mb-7 flex items-center justify-between gap-3">
-          <span className="font-semibold tracking-tight text-foreground">hoardcore</span>
+      <section className="w-full max-w-[430px] border border-border bg-card/95 p-5 shadow-xl shadow-foreground/10 backdrop-blur-md sm:p-7" aria-labelledby="login-heading">
+        <div className="mb-6 flex items-center justify-between gap-3 border-b border-border pb-4">
+          <HoardcoreWordmark />
           <ThemeModeToggle />
         </div>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground" id="login-heading">Sign in</h1>
