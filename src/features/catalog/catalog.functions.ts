@@ -2,8 +2,8 @@ import { createServerFn } from '@tanstack/react-start'
 import { setResponseHeader } from '@tanstack/react-start/server'
 import { requireSession } from '~/server/auth.server'
 import { getDatabase } from '~/server/db/index.server'
-import { listCurrentCatalogListings } from '~/server/db/catalog-persistence.server'
-import { currentListingsResponseSchema } from './catalog.schemas'
+import { listCurrentCatalogListings, listCurrentCatalogListingsPage } from '~/server/db/catalog-persistence.server'
+import { currentListingsPageInputSchema, currentListingsPageResponseSchema, currentListingsResponseSchema } from './catalog.schemas'
 import { z } from 'zod'
 import { createResearchBatchExport } from '~/features/research/research.batch'
 import { persistResearchBatchExport } from '~/features/research/research.server'
@@ -15,6 +15,16 @@ export const listCurrentListings = createServerFn({ method: 'GET' }).handler(asy
   const listings = await listCurrentCatalogListings(getDatabase())
   return currentListingsResponseSchema.parse({ listings })
 })
+
+/** Paginated workbench query. Use this for route loaders; the legacy full-list
+ * function remains only while callers migrate. */
+export const listCurrentListingsPage = createServerFn({ method: 'GET' })
+  .validator(currentListingsPageInputSchema)
+  .handler(async ({ data }) => {
+    await requireSession()
+    setResponseHeader('Cache-Control', 'private, no-store')
+    return currentListingsPageResponseSchema.parse(await listCurrentCatalogListingsPage(getDatabase(), data))
+  })
 
 export const createResearchExport = createServerFn({ method: 'POST' })
   .validator(z.object({ listingIds: z.array(z.uuid()).min(1).max(100), persist: z.boolean().default(true) }))
