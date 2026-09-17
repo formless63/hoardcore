@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { markUnexpectedRunnerExit, recoverInterruptedCollectionRuns } from './lifecycle.server'
+import { markUnexpectedRunnerExit, recoverInterruptedCollectionRuns, recoverOrphanedQueuedCollectionRuns } from './lifecycle.server'
 
 describe('embedded worker lifecycle', () => {
   it('marks readiness failed and releases WorkerUtils when its runner exits', async () => {
@@ -64,5 +64,23 @@ describe('embedded worker lifecycle', () => {
 
     expect(query).toHaveBeenCalledOnce()
     expect(permanentlyFailJobs).not.toHaveBeenCalled()
+  })
+
+  it('preserves queued runs with jobs but releases queued runs stranded without one', async () => {
+    const kept = 'f08a1193-1f17-4c9d-9fc6-9d4706afc1a4'
+    const orphaned = '4ae76b7d-784e-4796-883b-1e17788b8ac0'
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ id: kept }, { id: orphaned }] })
+      .mockResolvedValueOnce({ rows: [{ runId: kept }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+
+    const recovered = await recoverOrphanedQueuedCollectionRuns({ query } as never)
+
+    expect(recovered).toBe(1)
+    expect(query.mock.calls[2]?.[1]).toEqual([
+      expect.stringContaining('no durable job'),
+      [orphaned],
+    ])
   })
 })

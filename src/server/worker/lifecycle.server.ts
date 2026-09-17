@@ -69,6 +69,7 @@ async function startWorkerInternal(runtime: WorkerRuntimeState, pool: Pool): Pro
   runtime.workerUtils = await makeWorkerUtils({ pgPool: pool })
   await runtime.workerUtils.migrate()
   await recoverInterruptedCollectionRuns(pool, runtime.workerUtils)
+  await recoverOrphanedQueuedCollectionRuns(pool)
   runtime.runner = await run({
     pgPool: pool,
     taskList: taskRegistry,
@@ -82,6 +83,7 @@ async function startWorkerInternal(runtime: WorkerRuntimeState, pool: Pool): Pro
 
 const interruptedRunMessage = 'Collection interrupted by an application restart before completion; it was not retried automatically.'
 const interruptedJobMessage = 'Collection run was interrupted by an application restart and was not retried automatically.'
+const orphanedQueuedRunMessage = 'Queued collection had no durable job after an application restart; it was not retried automatically.'
 
 /**
  * A source request should never resume merely because the application process
@@ -131,6 +133,46 @@ export async function recoverInterruptedCollectionRuns(
     select unnest($1::uuid[]), $2
   `, [runIds, interruptedRunMessage])
   return runIds.length
+}
+
+/**
+ * A queued collection may be safely preserved across a restart, but only when
+ * its durable Graphile job is still present (including a future Retry-After
+ * deferral). A queue row without that job can never make progress and would
+ * otherwise occupy the per-source active-run slot indefinitely.
+ */
+export async function recoverOrphanedQueuedCollectionRuns(pool: Pick<Pool, 'query'>): Promise<number> {
+  const queued = await pool.query<{ id: string }>(`
+    select id::text as id
+    from collection_runs
+    where status = 'queued'
+  `)
+  const queuedIds = queued.rows.map((row) => row.id)
+  if (!queuedIds.length) return 0
+
+  const jobs = await pool.query<{ runId: string | null }>(`
+    select payload ->> 'runId' as "runId"
+    from graphile_worker.jobs
+    where task_identifier = $1
+      and payload ->> 'runId' = any($2::text[])
+  `, ['catalog.collect', queuedIds])
+  const jobRunIds = new Set(jobs.rows.flatMap((row) => row.runId ? [row.runId] : []))
+  const orphanedIds = queuedIds.filter((id) => !jobRunIds.has(id))
+  if (!orphanedIds.length) return 0
+
+  await pool.query(`
+    update collection_runs
+    set status = 'failed',
+        error = $1,
+        completed_at = now()
+    where id = any($2::uuid[])
+      and status = 'queued'
+  `, [orphanedQueuedRunMessage, orphanedIds])
+  await pool.query(`
+    insert into collection_run_events (run_id, message)
+    select unnest($1::uuid[]), $2
+  `, [orphanedIds, orphanedQueuedRunMessage])
+  return orphanedIds.length
 }
 
 function monitorRunner(runtime: WorkerRuntimeState, runner: Runner): void {
