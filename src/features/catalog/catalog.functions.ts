@@ -19,7 +19,7 @@ export const listCurrentListings = createServerFn({ method: 'GET' }).handler(asy
 })
 
 export const createResearchExport = createServerFn({ method: 'POST' })
-  .validator(z.object({ listingIds: z.array(z.uuid()).min(1).max(100) }))
+  .validator(z.object({ listingIds: z.array(z.uuid()).min(1).max(100), persist: z.boolean().default(true) }))
   .handler(async ({ data }) => {
     const session = await requireSession()
     setResponseHeader('Cache-Control', 'private, no-store')
@@ -53,5 +53,8 @@ export const createResearchExport = createServerFn({ method: 'POST' })
       },
       evidenceId: row.evidence?.id,
     }))
-    return persistResearchBatchExport(getDatabase(), session.user.id, createResearchBatchExport(records))
+    const exported = createResearchBatchExport(records)
+    // Route preloading may request a draft packet. Only an explicit export or
+    // save action should create an immutable research batch.
+    return data.persist ? persistResearchBatchExport(getDatabase(), session.user.id, exported) : exported
   })

@@ -94,6 +94,7 @@ export function previewResearchResult(
     expectedPacket.records.map((record) => `${record.reference.entityType}:${record.reference.hoardcoreId}`),
   )
   const seenReferences = new Set<string>()
+  const seenComparableIds = new Set<string>()
   const records: ResearchPreviewRecord[] = []
   const rawRecords = Array.isArray(candidate.records) ? candidate.records : []
   if (!Array.isArray(candidate.records)) {
@@ -113,6 +114,16 @@ export function previewResearchResult(
     const record = parsedRecord.data
     const key = `${record.reference.entityType}:${record.reference.hoardcoreId}`
     const recordDiagnostics: ValidationDiagnostic[] = []
+    for (const [comparableIndex, comparable] of (record.comparables ?? []).entries()) {
+      if (seenComparableIds.has(comparable.comparableId)) {
+        diagnostics.push(diagnostic(
+          ['records', index, 'comparables', comparableIndex, 'comparableId'],
+          'duplicate_comparable_id',
+          'Comparable ID must be unique across the entire research result',
+        ))
+      }
+      seenComparableIds.add(comparable.comparableId)
+    }
     if (!expectedReferences.has(key)) {
       recordDiagnostics.push(diagnostic(
         ['records', index, 'reference'],

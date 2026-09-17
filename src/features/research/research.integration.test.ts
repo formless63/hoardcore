@@ -9,12 +9,14 @@ import {
   authorizeResearchApiToken,
   createResearchApiToken,
   importResearchResult,
+  importResearchPreview,
   listResearchComparables,
   listResearchHistory,
   revokeResearchApiToken,
   saveResearchBatch,
 } from './research.server'
 import { researchBatches, researchSubmissions } from '~/server/db/schema/research'
+import { previewResearchResult } from './research.preview'
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL
 if (testDatabaseUrl) process.env.DATABASE_URL = testDatabaseUrl
@@ -67,7 +69,8 @@ describeWithDatabase('research persistence and agent authorization', () => {
       variant: { variantKey: variantId, productKey: productId, title: 'Default', price: 12, currency: 'USD', available: true },
       listing: { listingKey: listingId, sourceKey: `research-${suffix}`, productKey: productId, variantKey: variantId, url: 'https://example.test/research-fixture', current: { title: 'Research fixture product', price: 12, currency: 'USD', available: true }, observedAt: '2026-09-16T00:00:00Z' },
     }], { createdAt: '2026-09-16T01:00:00Z' })
-    await saveResearchBatch(db(), firstUserId, exported.packet, exported.prompt)
+    const savedBatch = await saveResearchBatch(db(), firstUserId, exported.packet, exported.prompt)
+    expect(await saveResearchBatch(db(), firstUserId, exported.packet, exported.prompt)).toEqual(savedBatch)
     const raw = JSON.stringify({
       resultVersion: '1.0', packetVersion: exported.packet.packetVersion, promptVersion: exported.packet.promptVersion, schemaVersion: exported.packet.schemaVersion,
       packetId: exported.packet.packetId, resultId: `manual-${suffix}`, completedAt: '2026-09-16T02:00:00Z',
@@ -94,6 +97,19 @@ describeWithDatabase('research persistence and agent authorization', () => {
     expect(history).toHaveLength(2)
     expect(history.map((item) => item.rawPayload)).toEqual(expect.arrayContaining([raw, noteRaw]))
     expect((await db().select().from(researchSubmissions).where(eq(researchSubmissions.id, imported.id))).length).toBe(1)
+
+    const duplicate = JSON.parse(raw) as { resultId: string; records: { comparables: { comparableId: string }[] }[] }
+    duplicate.resultId = `rollback-${suffix}`
+    duplicate.records[0]!.comparables.push({ ...duplicate.records[0]!.comparables[0]! })
+    const duplicateRaw = JSON.stringify(duplicate)
+    const duplicatePreview = previewResearchResult(duplicateRaw, exported.packet)
+    expect(duplicatePreview.status).toBe('invalid')
+    // Exercise a projection failure inside the transaction even though the
+    // normal preview boundary now rejects duplicate IDs before import.
+    await expect(importResearchPreview(db(), firstUserId, { ...duplicatePreview, status: 'valid', diagnostics: [] })).rejects.toThrow()
+    expect(await db().select().from(researchSubmissions).where(eq(researchSubmissions.resultId, duplicate.resultId))).toEqual([])
+    duplicate.records[0]!.comparables[1]!.comparableId = 'sold-2'
+    expect(await importResearchResult(db(), firstUserId, JSON.stringify(duplicate))).toMatchObject({ comparableCount: 2 })
 
     await expect(saveResearchBatch(db(), firstUserId, { ...exported.packet, createdAt: '2026-09-16T03:00:00Z' }, exported.prompt)).rejects.toThrow('immutable packet')
     const credential = await createResearchApiToken(db(), firstUserId, 'integration agent')

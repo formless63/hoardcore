@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createResearchBatchExport } from './research.batch'
 import { previewResearchResult } from './research.preview'
+import { marketComparableSchema } from './research.schemas'
 import type { NormalizedCatalogRecord } from '~/modules/types'
 
 const catalogRecord: NormalizedCatalogRecord = {
@@ -67,5 +68,21 @@ describe('research result preview reconciliation', () => {
     expect(preview.records[2]?.diagnostics[0]?.code).toBe('unknown_reference')
     expect(preview.records.every((record) => record.record || record.diagnostics.length > 0)).toBe(true)
   })
-})
 
+  it('rejects duplicate comparable IDs across records before persistence', () => {
+    const packet = expected()
+    const comparable = { comparableId: 'same-id', channel: 'Marketplace', evidenceType: 'completed_sale', price: 12, currency: 'USD' }
+    const base = { ...validResult(packet).records[0]!, comparables: [comparable] }
+    const preview = previewResearchResult({ ...validResult(packet), records: [base, base] }, packet)
+    expect(preview.status).toBe('invalid')
+    expect(preview.diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'duplicate_comparable_id' })]))
+  })
+
+  it('keeps comparable amounts within the database precision', () => {
+    const comparable = { comparableId: 'c1', channel: 'Marketplace', evidenceType: 'completed_sale', price: 45.99, currency: 'USD' }
+    expect(marketComparableSchema.safeParse(comparable).success).toBe(true)
+    expect(marketComparableSchema.safeParse({ ...comparable, price: 45.999 }).success).toBe(false)
+    expect(marketComparableSchema.safeParse({ ...comparable, price: 1_000_000_000_000 }).success).toBe(false)
+    expect(marketComparableSchema.safeParse({ ...comparable, sampleSize: 2_147_483_648 }).success).toBe(false)
+  })
+})

@@ -1,4 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
 import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm'
 import type { Database } from '~/server/db/db.server'
 import { catalogProducts, catalogVariants, sourceListings } from '~/server/db/schema/catalog'
@@ -53,7 +54,7 @@ export async function saveResearchBatch(db: Database, userId: string, packet: Re
     .onConflictDoNothing().returning({ id: researchBatches.id, packetId: researchBatches.packetId })
   if (inserted[0]) return inserted[0]
   const [existing] = await db.select().from(researchBatches).where(eq(researchBatches.packetId, packet.packetId)).limit(1)
-  if (!existing || existing.createdByUserId !== userId || JSON.stringify(existing.packet) !== JSON.stringify(packet) || existing.prompt !== prompt) {
+  if (!existing || existing.createdByUserId !== userId || !isDeepStrictEqual(existing.packet, packet) || existing.prompt !== prompt) {
     throw new Error('ResearchPacket ID is already bound to a different immutable packet')
   }
   return { id: existing.id, packetId: existing.packetId }
@@ -99,45 +100,48 @@ export async function importResearchPreview(db: Database, userId: string, previe
   if (!batch) throw new Error('ResearchPacket is not available to this user')
   const packet = parseResearchPacket(batch.packet)
   const refs = await resolveReferenceIds(db, packet)
-  const inserted = await db.insert(researchSubmissions).values({
-    batchId: batch.id, submittedByUserId: userId, resultId: result.resultId, status: preview.status,
-    rawPayload: preview.rawInput, normalizedPayload: result, diagnostics: [...preview.diagnostics, ...preview.records.flatMap((record) => record.diagnostics)], completedAt: new Date(result.completedAt),
-  }).onConflictDoNothing().returning({ id: researchSubmissions.id })
-  if (!inserted[0]) {
-    const [existing] = await db.select({ id: researchSubmissions.id, rawPayload: researchSubmissions.rawPayload }).from(researchSubmissions)
-      .where(and(eq(researchSubmissions.batchId, batch.id), eq(researchSubmissions.resultId, result.resultId))).limit(1)
-    if (existing?.rawPayload === preview.rawInput) return { id: existing.id, status: preview.status, comparableCount: 0, idempotent: true }
-    throw new Error('Research result ID is already bound to a different immutable submission')
-  }
-  const submission = inserted[0]
-
   const validRecords = preview.records.flatMap((item) => item.record && item.status !== 'invalid' ? [item.record] : [])
-  const rows = validRecords.flatMap((record) => {
-    const packetRecord = packet.records.find((candidate) => candidate.reference.entityType === record.reference.entityType && candidate.reference.hoardcoreId === record.reference.hoardcoreId)
-    if (!packetRecord) return []
-    return (record.comparables ?? []).map((comparable) => ({
-      submissionId: submission.id,
-      sourceListingId: packetRecord.listing ? refs.listings.get(packetRecord.listing.hoardcoreId) : null,
-      productId: packetRecord.product ? refs.products.get(packetRecord.product.hoardcoreId) : null,
-      variantId: packetRecord.variant ? refs.variants.get(packetRecord.variant.hoardcoreId) : null,
-      comparableId: comparable.comparableId,
-      channel: comparable.channel,
-      evidenceType: comparable.evidenceType,
-      price: String(comparable.price),
-      shipping: comparable.shipping === undefined ? null : String(comparable.shipping),
-      currency: comparable.currency.toUpperCase(),
-      condition: comparable.condition ?? null,
-      observedAt: comparable.observedAt ? new Date(comparable.observedAt) : null,
-      soldAt: comparable.soldAt ? new Date(comparable.soldAt) : null,
-      sampleSize: comparable.sampleSize ?? null,
-      sampleWindow: comparable.sampleWindow ?? null,
-      url: comparable.url ?? null,
-      citationId: comparable.citationId ?? null,
-      notes: comparable.notes ?? null,
-    }))
+  // A submission and all of its projections are one immutable unit. If any
+  // comparable fails, rolling back the submission keeps the same result ID
+  // retryable instead of incorrectly treating an incomplete import as done.
+  return db.transaction(async (tx) => {
+    const inserted = await tx.insert(researchSubmissions).values({
+      batchId: batch.id, submittedByUserId: userId, resultId: result.resultId, status: preview.status,
+      rawPayload: preview.rawInput, normalizedPayload: result, diagnostics: [...preview.diagnostics, ...preview.records.flatMap((record) => record.diagnostics)], completedAt: new Date(result.completedAt),
+    }).onConflictDoNothing().returning({ id: researchSubmissions.id })
+    if (!inserted[0]) {
+      const [existing] = await tx.select({ id: researchSubmissions.id, rawPayload: researchSubmissions.rawPayload }).from(researchSubmissions)
+        .where(and(eq(researchSubmissions.batchId, batch.id), eq(researchSubmissions.resultId, result.resultId))).limit(1)
+      if (existing?.rawPayload === preview.rawInput) return { id: existing.id, status: preview.status, comparableCount: 0, idempotent: true }
+      throw new Error('Research result ID is already bound to a different immutable submission')
+    }
+    const rows = validRecords.flatMap((record) => {
+      const packetRecord = packet.records.find((candidate) => candidate.reference.entityType === record.reference.entityType && candidate.reference.hoardcoreId === record.reference.hoardcoreId)
+      if (!packetRecord) return []
+      return (record.comparables ?? []).map((comparable) => ({
+        submissionId: inserted[0].id,
+        sourceListingId: packetRecord.listing ? refs.listings.get(packetRecord.listing.hoardcoreId) : null,
+        productId: packetRecord.product ? refs.products.get(packetRecord.product.hoardcoreId) : null,
+        variantId: packetRecord.variant ? refs.variants.get(packetRecord.variant.hoardcoreId) : null,
+        comparableId: comparable.comparableId,
+        channel: comparable.channel,
+        evidenceType: comparable.evidenceType,
+        price: String(comparable.price),
+        shipping: comparable.shipping === undefined ? null : String(comparable.shipping),
+        currency: comparable.currency.toUpperCase(),
+        condition: comparable.condition ?? null,
+        observedAt: comparable.observedAt ? new Date(comparable.observedAt) : null,
+        soldAt: comparable.soldAt ? new Date(comparable.soldAt) : null,
+        sampleSize: comparable.sampleSize ?? null,
+        sampleWindow: comparable.sampleWindow ?? null,
+        url: comparable.url ?? null,
+        citationId: comparable.citationId ?? null,
+        notes: comparable.notes ?? null,
+      }))
+    })
+    if (rows.length) await tx.insert(researchComparables).values(rows)
+    return { id: inserted[0].id, status: preview.status, comparableCount: rows.length }
   })
-  if (rows.length) await db.insert(researchComparables).values(rows)
-  return { id: submission.id, status: preview.status, comparableCount: rows.length }
 }
 
 export async function importResearchResult(db: Database, userId: string, input: string | unknown) {

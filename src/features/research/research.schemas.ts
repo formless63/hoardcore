@@ -7,6 +7,10 @@ export const RESEARCH_PROMPT_VERSION = '1.0'
 
 const nonEmpty = z.string().trim().min(1)
 const timestamp = z.iso.datetime({ offset: true })
+// PostgreSQL stores comparable prices as numeric(14,2). Reject values that
+// would overflow or be silently rounded before they reach persistence.
+const comparableAmount = z.number().finite().nonnegative().max(999_999_999_999.99)
+  .refine((value) => Math.abs(value * 100 - Math.round(value * 100)) < 0.0001, 'Use at most two decimal places')
 
 /** Immutable identity issued by Hoardcore; source-native IDs are not sufficient. */
 export const researchEntityReferenceSchema = z.object({
@@ -89,13 +93,13 @@ export const marketComparableSchema = z.object({
   comparableId: nonEmpty,
   channel: nonEmpty.max(120),
   evidenceType: z.enum(['active_asking', 'completed_sale', 'retail_offer']),
-  price: z.number().nonnegative(),
-  shipping: z.number().nonnegative().optional(),
+  price: comparableAmount,
+  shipping: comparableAmount.optional(),
   currency: z.string().trim().length(3),
   condition: z.string().trim().min(1).max(120).optional(),
   observedAt: timestamp.optional(),
   soldAt: timestamp.optional(),
-  sampleSize: z.number().int().positive().optional(),
+  sampleSize: z.number().int().positive().max(2_147_483_647).optional(),
   sampleWindow: z.string().trim().min(1).max(160).optional(),
   url: z.url().optional(),
   citationId: nonEmpty.optional(),
