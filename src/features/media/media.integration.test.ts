@@ -14,6 +14,7 @@ import {
   getListingMediaCaptures,
   getProductMediaGallery,
   persistListingMedia,
+  reuseListingMedia,
 } from './media.server'
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL
@@ -104,5 +105,9 @@ describeWithDatabase('captured listing media persistence', () => {
 
     const captureRows = await db.select().from(listingMedia).where(inArray(listingMedia.id, [first.id, secondPhoto.id, sibling.id]))
     expect(captureRows).toHaveLength(3)
+
+    const reused = await reuseListingMedia(db, secondListingId, 'https://cdn.shopify.com/fixture-one.jpg')
+    expect(reused).toMatchObject({ thumbnailBlobId: first.thumbnailBlobId, previewBlobId: first.previewBlobId })
+    expect(await db.select().from(mediaBlobs).where(inArray(mediaBlobs.id, [...blobIds]))).toHaveLength(2)
   })
 })

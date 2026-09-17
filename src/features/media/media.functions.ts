@@ -6,6 +6,7 @@ import { getDatabase } from '~/server/db/index.server'
 import { catalogSources } from '~/server/db/schema/catalog-sources'
 import { mediaCaptureRuns } from '~/server/db/schema/media'
 import { createMediaCaptureRunSchema } from './media.schemas'
+import { enqueueMediaCaptureBatch } from './media.server'
 import { enqueueJob } from '~/server/worker/index.server'
 
 export const getMediaCaptureAvailability = createServerFn({ method: 'GET' }).handler(async () => {
@@ -24,18 +25,15 @@ export const requestMediaCaptureRun = createServerFn({ method: 'POST' })
     const db = getDatabase()
     const [source] = await db.select({ id: catalogSources.id }).from(catalogSources).where(eq(catalogSources.id, data.sourceId)).limit(1)
     if (!source) throw new Error('Source not found')
-    const [run] = await db.insert(mediaCaptureRuns).values({ sourceId: source.id, requestLimit: data.requestLimit }).returning()
     try {
-      await enqueueJob('media.capture', { runId: run.id }, { maxAttempts: 1 })
+      const run = await enqueueMediaCaptureBatch(db, source.id, data.requestLimit, (runId) =>
+        enqueueJob('media.capture', { runId }, { maxAttempts: 1, priority: 10 }))
+      if (!run) throw new Error('A photo batch is already queued or running for this source')
+      return run
     } catch (error) {
-      await db.update(mediaCaptureRuns).set({
-        status: 'failed',
-        error: `Queue enqueue failed: ${error instanceof Error ? error.message : String(error)}`,
-        completedAt: new Date(),
-      }).where(eq(mediaCaptureRuns.id, run.id))
+      if (error instanceof Error && error.message.includes('already queued')) throw error
       throw new Error('The media capture run could not be queued. Try again.')
     }
-    return run
   })
 
 export const listMediaCaptureRuns = createServerFn({ method: 'GET' })

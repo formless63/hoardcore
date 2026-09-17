@@ -38,9 +38,10 @@ The module should support catalog snapshots and change observations before deepe
 
 ### Source media
 
-Catalog collection records image URLs and evidence without downloading binaries as a hidden
-per-product fan-out. A separate, operator-controlled media capture workflow should fetch from the
-approved deployment location with its own conservative request budget and access checks. Retain
+Catalog collection records image URLs and evidence without downloading binaries inline. When an
+operator enables media capture on an approved deployment, collection may queue bounded, paced
+follow-up photo batches with explicit concurrency and access checks. Catalog completion should
+not wait for image downloads, and catalog jobs should outrank media batches. Retain
 small decoded/re-encoded thumbnail and detail-preview derivatives, source URL, checksum, capture
 time, and dimensions. Serve captured images through authenticated Hoardcore routes so browsers do
 not have to contact source CDNs. Start with deduplicated PostgreSQL binary storage and measure

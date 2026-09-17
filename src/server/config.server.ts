@@ -33,6 +33,9 @@ const serverConfigSchema = z.object({
   // Media acquisition is disabled unless this deployment explicitly opts in.
   // Development hosts should leave this unset to avoid source-CDN requests.
   MEDIA_CAPTURE_ENABLED: z.enum(['true', 'false']).default('false'),
+  MEDIA_CAPTURE_CONCURRENCY: z.coerce.number().int().min(1).max(4).default(3),
+  MEDIA_CAPTURE_MINIMUM_DELAY_MS: z.coerce.number().int().min(1_000).max(15 * 60_000).default(1_500),
+  MEDIA_CAPTURE_AUTO_REQUEST_LIMIT: z.coerce.number().int().min(2).max(100).default(20),
 }).superRefine((config, context) => {
   const oidc = [config.OIDC_ISSUER, config.OIDC_CLIENT_ID, config.OIDC_CLIENT_SECRET]
   if (oidc.some(Boolean) && !oidc.every(Boolean)) {

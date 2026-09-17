@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { createImageDerivatives, createMediaRobotsAccessPolicy, fetchMediaBytes, MediaCaptureError } from './capture.server'
+import { mediaCandidateKey } from './media.server'
 import { isAllowedShopifyMediaUrl } from '~/modules/shopify/media-policy'
 
-const policy = { enabled: true, requestLimit: 5, minimumDelayMs: 1, maxRetries: 1, userAgent: 'Hoardcore test' }
+const policy = { enabled: true, requestLimit: 5, concurrency: 3, minimumDelayMs: 1, maxRetries: 1, userAgent: 'Hoardcore test' }
 const onePixelPng = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'))
 
 function response(status: number, body = onePixelPng, headers: Record<string, string> = { 'content-type': 'image/png' }) {
@@ -14,6 +15,12 @@ function response(status: number, body = onePixelPng, headers: Record<string, st
 }
 
 describe('media capture safety', () => {
+  it('uses a JSONB-safe continuation cursor', () => {
+    const cursor = mediaCandidateKey({ listingId: '00000000-0000-0000-0000-000000000001', sourceUrl: 'https://cdn.shopify.com/a.jpg' })
+    expect(cursor).not.toContain('\u0000')
+    expect(JSON.parse(JSON.stringify({ after: cursor }))).toEqual({ after: cursor })
+  })
+
   it('accepts only module-approved Shopify media hosts', () => {
     const config = { catalogUrl: 'https://demo.example/collections/sale' }
     expect(isAllowedShopifyMediaUrl(config, 'https://demo.example/a.jpg')).toBe(true)
@@ -34,6 +41,45 @@ describe('media capture safety', () => {
     expect(budget.requests).toBe(1)
   })
 
+  it('shares one robots check across concurrent images on the same origin', async () => {
+    const calls: string[] = []
+    const budget = { requests: 0, maxRequests: 3 }
+    const access = createMediaRobotsAccessPolicy(budget, async (url) => {
+      calls.push(url)
+      return response(200)
+    }, 'Hoardcore test', 1, async () => {})
+    expect(await Promise.all([
+      access('https://cdn.shopify.com/one.jpg'),
+      access('https://cdn.shopify.com/two.jpg'),
+    ])).toEqual([true, true])
+    expect(calls).toHaveLength(1)
+    expect(budget.requests).toBe(1)
+  })
+
+  it('paces concurrent request starts and never exceeds the shared ceiling', async () => {
+    const budget = { requests: 0, maxRequests: 2 }
+    let active = 0
+    let maximumActive = 0
+    let waits = 0
+    const http = async () => {
+      active += 1
+      maximumActive = Math.max(maximumActive, active)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      active -= 1
+      return response(200)
+    }
+    const results = await Promise.allSettled([1, 2, 3].map((number) =>
+      fetchMediaBytes(`https://cdn.shopify.com/${number}.jpg`, policy, budget, http, {
+        accessPolicy: async () => true,
+        wait: async () => { waits += 1 },
+      })))
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(2)
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1)
+    expect(maximumActive).toBe(2)
+    expect(waits).toBe(1)
+    expect(budget.requests).toBe(2)
+  })
+
   it('honors a retry response without exceeding the explicit ceiling', async () => {
     const budget = { requests: 0, maxRequests: 3 }
     let calls = 0
@@ -44,6 +90,19 @@ describe('media capture safety', () => {
     expect(acquired.contentType).toBe('image/png')
     expect(calls).toBe(2)
     expect(budget.requests).toBe(2)
+  })
+
+  it('halts the batch after a persistent access rejection', async () => {
+    const budget = { requests: 0, maxRequests: 5, stopped: false }
+    const http = async () => response(403)
+    await expect(fetchMediaBytes('https://cdn.shopify.com/rejected.jpg', policy, budget, http, {
+      accessPolicy: async () => true, wait: async () => {},
+    })).rejects.toMatchObject({ kind: 'persistent_rejection' } satisfies Partial<MediaCaptureError>)
+    expect(budget.stopped).toBe(true)
+    await expect(fetchMediaBytes('https://cdn.shopify.com/another.jpg', policy, budget, http, {
+      accessPolicy: async () => true, wait: async () => {},
+    })).rejects.toMatchObject({ kind: 'persistent_rejection' } satisfies Partial<MediaCaptureError>)
+    expect(budget.requests).toBe(1)
   })
 
   it('does not follow redirects or accept non-images', async () => {
@@ -62,9 +121,9 @@ describe('media capture safety', () => {
   it('rejects local and credential-bearing image URLs before a request', async () => {
     const http = async () => { throw new Error('network must not be called') }
     await expect(fetchMediaBytes('https://user:secret@cdn.shopify.com/a.jpg', policy, { requests: 0, maxRequests: 2 }, http, { accessPolicy: async () => true, wait: async () => {} }))
-      .rejects.toMatchObject({ kind: 'access_denied' } satisfies Partial<MediaCaptureError>)
+      .rejects.toMatchObject({ kind: 'source_url_rejected' } satisfies Partial<MediaCaptureError>)
     await expect(fetchMediaBytes('https://127.0.0.1/a.jpg', policy, { requests: 0, maxRequests: 2 }, http, { accessPolicy: async () => true, wait: async () => {} }))
-      .rejects.toMatchObject({ kind: 'access_denied' } satisfies Partial<MediaCaptureError>)
+      .rejects.toMatchObject({ kind: 'source_url_rejected' } satisfies Partial<MediaCaptureError>)
   })
 
   it('creates small WebP thumbnail and preview derivatives', async () => {

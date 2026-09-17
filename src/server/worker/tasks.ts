@@ -1,4 +1,4 @@
-import type { Task, TaskList } from 'graphile-worker'
+import type { JobHelpers, Task, TaskList } from 'graphile-worker'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import { getDatabase } from '../db/index.server'
 import { catalogSources } from '../db/schema/catalog-sources'
@@ -9,6 +9,7 @@ import { collectShopifySnapshot, type ShopifyCollectionPolicy } from '../../modu
 import robotsParser from 'robots-parser'
 import { shopifySourceConfigSchema } from '../../modules/shopify'
 import { runMediaCapture } from '~/features/media/capture.server'
+import { enqueueMediaCaptureBatch, listSourceMediaCandidates } from '~/features/media/media.server'
 import { getServerConfig } from '~/server/config.server'
 import { mediaCaptureRuns } from '~/server/db/schema/media'
 import { evaluateCollectionAlertsTask, deliverAlertsTask, type AlertTaskPayload, type AlertDeliveryTaskPayload } from '~/features/alerts/alerts.tasks'
@@ -18,7 +19,7 @@ import { COLLECTION_DISABLED_MESSAGE } from '~/features/sources/collection-gate'
 export interface HoardcoreTaskPayloads {
   'fixture.echo': { value: string }
   'catalog.collect': { sourceId: string; runId: string }
-  'media.capture': { runId: string }
+  'media.capture': { runId: string; after?: string; auto?: boolean }
   'alerts.evaluate': AlertTaskPayload
   'alerts.deliver': AlertDeliveryTaskPayload
 }
@@ -38,6 +39,7 @@ export interface CatalogCollectionTaskDependencies {
   run?: ShopifyCollectionRun
   http?: ShopifyHttpClient
   collectionEnabled?: boolean
+  mediaEnabled?: boolean
 }
 
 export function createRobotsAccessPolicy(
@@ -72,7 +74,7 @@ export function createRobotsAccessPolicy(
 
 export async function runCatalogCollection(
   payload: HoardcoreTaskPayloads['catalog.collect'],
-  helpers: { logger: { info(message: string): void }; addJob?: (name: 'alerts.evaluate', payload: AlertTaskPayload) => Promise<unknown> },
+  helpers: { logger: { info(message: string): void }; addJob?: JobHelpers['addJob'] },
   dependencies: CatalogCollectionTaskDependencies = {},
 ) {
   const db = getDatabase()
@@ -157,6 +159,16 @@ export async function runCatalogCollection(
         ? `Page ${result.incomplete.page} failed validation (${result.incomplete.detail}). Saved ${result.productCount} products from earlier pages as a partial snapshot.`
         : `Request ceiling reached after ${result.pageCount} full pages. Saved ${result.productCount} products as a partial snapshot; more pages may exist.`
       : result.status === 'not_modified' ? 'Source reported no change.' : `Complete snapshot saved: ${result.productCount} products.`)
+    if ((dependencies.mediaEnabled ?? getServerConfig().MEDIA_CAPTURE_ENABLED === 'true') && helpers.addJob) {
+      try {
+        if ((await listSourceMediaCandidates(db, source.id)).length) {
+          await enqueueMediaCaptureBatch(db, source.id, getServerConfig().MEDIA_CAPTURE_AUTO_REQUEST_LIMIT, (runId) =>
+            helpers.addJob!('media.capture', { runId, auto: true }, { maxAttempts: 1, priority: 10 }))
+        }
+      } catch (mediaError) {
+        helpers.logger.info(`media.capture could not be queued; catalog persistence remains intact: ${String(mediaError)}`)
+      }
+    }
     helpers.logger.info(`catalog.collect: ${source.id} completed`)
   } catch (error) {
     const requestCount = run.requests
@@ -175,8 +187,22 @@ export const catalogCollectTask: Task<'catalog.collect'> = async (payload, helpe
 
 export const mediaCaptureTask: Task<'media.capture'> = async (payload, helpers) => {
   try {
-    await runMediaCapture(getDatabase(), payload.runId, { enabled: getServerConfig().MEDIA_CAPTURE_ENABLED === 'true' })
+    const db = getDatabase()
+    const config = getServerConfig()
+    const outcome = await runMediaCapture(db, payload.runId, {
+      enabled: config.MEDIA_CAPTURE_ENABLED === 'true', after: payload.after,
+      policy: { concurrency: config.MEDIA_CAPTURE_CONCURRENCY, minimumDelayMs: config.MEDIA_CAPTURE_MINIMUM_DELAY_MS },
+    })
     helpers.logger.info(`media.capture: ${payload.runId} finished`)
+    if (payload.auto && outcome.hasMore && !outcome.stopContinuation) {
+      try {
+        const [completed] = await db.select({ sourceId: mediaCaptureRuns.sourceId }).from(mediaCaptureRuns).where(eq(mediaCaptureRuns.id, payload.runId)).limit(1)
+        if (completed) await enqueueMediaCaptureBatch(db, completed.sourceId, config.MEDIA_CAPTURE_AUTO_REQUEST_LIMIT, (runId) =>
+          helpers.addJob('media.capture', { runId, after: outcome.after, auto: true }, { maxAttempts: 1, priority: 10 }))
+      } catch (queueError) {
+        helpers.logger.error(`media.capture continuation could not be queued: ${String(queueError)}`)
+      }
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     await getDatabase().update(mediaCaptureRuns).set({ status: 'failed', error: message, completedAt: new Date() }).where(eq(mediaCaptureRuns.id, payload.runId))

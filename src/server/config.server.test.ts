@@ -11,6 +11,9 @@ describe('parseServerConfig', () => {
     ).toEqual({
       DATABASE_URL: 'postgresql://hoardcore:secret@localhost:5432/hoardcore',
       MEDIA_CAPTURE_ENABLED: 'false',
+      MEDIA_CAPTURE_CONCURRENCY: 3,
+      MEDIA_CAPTURE_MINIMUM_DELAY_MS: 1500,
+      MEDIA_CAPTURE_AUTO_REQUEST_LIMIT: 20,
       CATALOG_COLLECTION_ENABLED: 'true',
     })
   })
@@ -19,6 +22,8 @@ describe('parseServerConfig', () => {
     expect(parseServerConfig({ DATABASE_URL: 'postgresql://localhost/hoardcore' }).MEDIA_CAPTURE_ENABLED).toBe('false')
     expect(parseServerConfig({ DATABASE_URL: 'postgresql://localhost/hoardcore', MEDIA_CAPTURE_ENABLED: 'true' }).MEDIA_CAPTURE_ENABLED).toBe('true')
     expect(() => parseServerConfig({ DATABASE_URL: 'postgresql://localhost/hoardcore', MEDIA_CAPTURE_ENABLED: 'yes' })).toThrow('MEDIA_CAPTURE_ENABLED')
+    expect(() => parseServerConfig({ DATABASE_URL: 'postgresql://localhost/hoardcore', MEDIA_CAPTURE_CONCURRENCY: '20' })).toThrow('MEDIA_CAPTURE_CONCURRENCY')
+    expect(() => parseServerConfig({ DATABASE_URL: 'postgresql://localhost/hoardcore', MEDIA_CAPTURE_MINIMUM_DELAY_MS: '0' })).toThrow('MEDIA_CAPTURE_MINIMUM_DELAY_MS')
   })
 
   it('allows a host to prohibit catalog source requests', () => {

@@ -1,8 +1,8 @@
-import { asc, eq, inArray } from 'drizzle-orm'
+import { and, asc, eq, inArray } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
 import type { Database } from '~/server/db/db.server'
 import { catalogSources } from '~/server/db/schema/catalog-sources'
-import { mediaBlobs, listingMedia } from '~/server/db/schema/media'
+import { mediaBlobs, listingMedia, mediaCaptureRuns } from '~/server/db/schema/media'
 import { catalogProducts, sourceListings } from '~/server/db/schema/catalog'
 import type { MediaVariant } from './media.schemas'
 
@@ -69,6 +69,22 @@ export async function persistListingMedia(db: Database, input: PersistListingMed
     }).returning()
     return capture
   })
+}
+
+/** Reuse already captured derivatives for the exact same source URL on another listing. */
+export async function reuseListingMedia(db: Database, listingId: string, sourceUrl: string) {
+  const [existing] = await db.select().from(listingMedia).where(eq(listingMedia.sourceUrl, sourceUrl)).limit(1)
+  if (!existing) return null
+  const [capture] = await db.insert(listingMedia).values({
+    listingId, sourceUrl, sourceSha256: existing.sourceSha256,
+    sourceContentType: existing.sourceContentType, originalWidth: existing.originalWidth,
+    originalHeight: existing.originalHeight, thumbnailBlobId: existing.thumbnailBlobId,
+    previewBlobId: existing.previewBlobId, capturedAt: existing.capturedAt,
+  }).onConflictDoNothing({ target: [listingMedia.listingId, listingMedia.sourceUrl] }).returning()
+  if (capture) return capture
+  const [current] = await db.select().from(listingMedia)
+    .where(and(eq(listingMedia.listingId, listingId), eq(listingMedia.sourceUrl, sourceUrl))).limit(1)
+  return current ?? null
 }
 
 export async function getAuthenticatedMediaVariant(db: Database, captureId: string, variant: MediaVariant) {
@@ -142,9 +158,37 @@ export async function getCaptureCandidate(db: Database, listingId: string) {
 
 export interface SourceMediaCandidate { listingId: string; sourceUrl: string }
 
+export function mediaCandidateKey(candidate: SourceMediaCandidate): string {
+  // This cursor travels through Graphile Worker's JSONB payload; avoid NUL,
+  // which PostgreSQL refuses even when escaped in JSON.
+  return `${candidate.listingId}|${candidate.sourceUrl}`
+}
+
+/** A source has at most one queued/running media batch. Queueing is explicit in one place. */
+export async function enqueueMediaCaptureBatch(
+  db: Database,
+  sourceId: string,
+  requestLimit: number,
+  enqueue: (runId: string) => Promise<unknown>,
+) {
+  const [active] = await db.select({ id: mediaCaptureRuns.id }).from(mediaCaptureRuns)
+    .where(and(eq(mediaCaptureRuns.sourceId, sourceId), inArray(mediaCaptureRuns.status, ['queued', 'running']))).limit(1)
+  if (active) return null
+  const [run] = await db.insert(mediaCaptureRuns).values({ sourceId, requestLimit }).returning()
+  try {
+    await enqueue(run.id)
+  } catch (error) {
+    await db.update(mediaCaptureRuns).set({
+      status: 'failed', error: `Queue enqueue failed: ${error instanceof Error ? error.message : String(error)}`, completedAt: new Date(),
+    }).where(eq(mediaCaptureRuns.id, run.id))
+    throw error
+  }
+  return run
+}
+
 /**
- * Expands a product's catalog image URLs only inside an explicitly requested
- * capture batch. This is not part of normal catalog collection and is kept
+ * Expands a product's catalog image URLs only inside a media capture batch.
+ * This is not part of the catalog HTTP request and is kept
  * in a single app-DB query to avoid source-side product fan-out.
  */
 export async function listSourceMediaCandidates(db: Database, sourceId: string): Promise<SourceMediaCandidate[]> {
@@ -164,5 +208,9 @@ export async function listSourceMediaCandidates(db: Database, sourceId: string):
       if (!alreadyCaptured.has(key)) candidates.push({ listingId: row.listingId, sourceUrl })
     }
   }
-  return candidates
+  return candidates.sort((left, right) => {
+    const leftKey = mediaCandidateKey(left)
+    const rightKey = mediaCandidateKey(right)
+    return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0
+  })
 }

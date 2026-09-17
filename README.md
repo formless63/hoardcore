@@ -25,8 +25,9 @@ watchlists, and opt-in alerts are available. Operator acceptance of each deploym
   evidence.
 - Versioned research packet export, validated preview/import, immutable raw submissions,
   manual comparable entry, and a scoped bearer-token API for coding agents.
-- Operator-queued, bounded photo capture with 96px thumbnails and 480px previews stored in
-  PostgreSQL. Browsers load captured images from authenticated Hoardcore routes, not source CDNs.
+- Opt-in photo capture that automatically queues paced, bounded follow-up batches after collection,
+  plus manual capture. It stores 96px thumbnails and 480px previews in PostgreSQL; browsers load
+  captured images from authenticated Hoardcore routes, not source CDNs.
 - Per-user watched listings and opt-in ntfy alerts for watched items or saved filter views.
 - Liveness and database-readiness endpoints at `/api/health` and `/api/ready`.
 

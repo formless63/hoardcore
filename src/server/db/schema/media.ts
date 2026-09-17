@@ -42,7 +42,7 @@ export const listingMedia = pgTable('listing_media', {
 
 export const mediaCaptureRunStatus = pgEnum('media_capture_run_status', ['queued', 'running', 'succeeded', 'partial', 'failed'])
 
-/** Durable audit trail for an explicitly initiated media-capture batch. */
+/** Durable audit trail for a manual or collection-triggered media-capture batch. */
 export const mediaCaptureRuns = pgTable('media_capture_runs', {
   id: uuid('id').defaultRandom().primaryKey(),
   sourceId: uuid('source_id').notNull().references(() => catalogSources.id, { onDelete: 'cascade' }),

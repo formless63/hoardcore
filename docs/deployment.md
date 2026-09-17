@@ -15,7 +15,9 @@ Copy `.env.example` to `.env` and set:
 - optionally `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` together
   for magic-link fallback sign-in; `SMTP_SECURE=true` is available for implicit TLS
 - `MEDIA_CAPTURE_ENABLED=true` only on an approved collection host when server-side photo
-  capture is intended; it is disabled by default
+  capture is intended; it is disabled by default. Optional `MEDIA_CAPTURE_CONCURRENCY` (1–4),
+  `MEDIA_CAPTURE_MINIMUM_DELAY_MS` (at least 1000), and `MEDIA_CAPTURE_AUTO_REQUEST_LIMIT` (2–100)
+  tune the bounded automatic batches; defaults are 3, 1500, and 20 respectively
 - `CATALOG_COLLECTION_ENABLED=false` on any host that must not make catalog source requests;
   queued jobs are also rejected by the worker before network access
 
@@ -110,11 +112,13 @@ bytes are included in PostgreSQL backups.
 
 ## Photos, research, and notifications
 
-Photo capture is separate from catalog collection and is never automatic. On an approved host,
-set `MEDIA_CAPTURE_ENABLED=true`, restart the regular app service, then use a source's
-**Capture photos** control to queue a bounded batch. The HTTP request ceiling includes access-policy
-checks; requests are paced serially and honor source controls. Repeat only after reviewing each
-batch's outcome. Leave the flag unset or `false` on a host whose network address should not make
+Photo capture runs as bounded follow-up jobs rather than inside catalog requests. On an approved
+host, set `MEDIA_CAPTURE_ENABLED=true` and restart the regular app service. Future catalog runs
+then queue photo batches automatically until discovered uncaptured images have been considered;
+the **Capture photos** control can also queue a manual batch. Each batch has an HTTP request ceiling
+including access-policy checks. A few image downloads can overlap, but request starts are paced
+and catalog jobs have higher queue priority. Automatic continuation stops on access denial or
+persistent rejection; review the run before trying again. Leave the flag unset or `false` on a host whose network address should not make
 source-CDN requests. Existing image URLs remain catalog evidence, but an uncaptured image shows a
 placeholder rather than making the viewer's browser fetch it from the source. PostgreSQL holds
 deduplicated, re-encoded small derivatives, so include it in capacity planning and backups.
