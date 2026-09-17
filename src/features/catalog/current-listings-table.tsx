@@ -1,7 +1,7 @@
 import { createColumnHelper, createSortedRowModel, rowSortingFeature, tableFeatures, useTable, type SortingState } from '@tanstack/react-table'
 import { Link, useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { createResearchExport } from './catalog.functions'
 import type { CurrentListing } from './catalog.schemas'
 import { emptyListingFilters, listingDiscount, listingFiltersSchema, matchesListingFilters, type ListingFilters } from './listing-filters'
@@ -12,7 +12,7 @@ import { CachedListingImage, mediaUrl } from '~/features/media/cached-listing-im
 import { WatchButton } from '~/features/watchlist/watch-button'
 import type { ResearchSummariesByListing, ResearchComparableSummaryType } from '~/features/research/research.server'
 import { displayListingTitle } from './display-listing-title'
-import { stockLabel } from './stock-label'
+import { imagePreviewPosition } from './image-preview-position'
 
 const features = tableFeatures({ rowSortingFeature, sortedRowModel: createSortedRowModel() })
 const helper = createColumnHelper<typeof features, CurrentListing>()
@@ -41,17 +41,18 @@ function researchValue(summaries: ResearchSummariesByListing, listingId: string,
   return <span className="block max-w-40 truncate" title={entries.map(describe).join(' · ')}>{entries.length === 1 ? describe(entries[0]!) : `${describe(entries[0]!)} +${entries.length - 1}`}</span>
 }
 
-function makeColumns(selected: Set<string>, toggle: (id: string) => void, showVariants: boolean, showModules: boolean, showMedia: (id: string | null) => void, watched: Set<string>, researchSummaries: ResearchSummariesByListing, showResearch: boolean) { return helper.columns([
+function makeColumns(selected: Set<string>, toggle: (id: string) => void, showVariants: boolean, showModules: boolean, showMedia: (id: string | null, x?: number, y?: number) => void, moveMedia: (x: number, y: number) => void, filterTo: (key: 'manufacturer' | 'category', value: string) => void, watched: Set<string>, researchSummaries: ResearchSummariesByListing, showResearch: boolean) { return helper.columns([
   helper.display({ id: 'select', header: '', cell: (info) => <input aria-label={`Select ${info.row.original.productTitle}`} type="checkbox" checked={selected.has(info.row.original.id)} onChange={() => toggle(info.row.original.id)} /> }),
-  helper.display({ id: 'image', header: '', cell: (info) => <span className="inline-flex size-9 min-w-9 items-center justify-center" tabIndex={info.row.original.mediaCaptureId ? 0 : -1} onMouseEnter={() => showMedia(info.row.original.mediaCaptureId ?? null)} onMouseLeave={() => showMedia(null)} onFocus={() => showMedia(info.row.original.mediaCaptureId ?? null)} onBlur={() => showMedia(null)}><CachedListingImage captureId={info.row.original.mediaCaptureId} alt="" className="block size-9 min-w-9 rounded border border-border object-contain text-[8px] text-muted-foreground" /></span> }),
-  helper.accessor('manufacturer', { header: 'Manufacturer', cell: (info) => info.getValue() || '—' }),
+  helper.display({ id: 'image', header: '', cell: (info) => <span className="inline-flex size-9 min-w-9 items-center justify-center" tabIndex={info.row.original.mediaCaptureId ? 0 : -1} onPointerEnter={(event) => { if (event.pointerType !== 'touch') showMedia(info.row.original.mediaCaptureId ?? null, event.clientX, event.clientY) }} onPointerMove={(event) => { if (event.pointerType !== 'touch') moveMedia(event.clientX, event.clientY) }} onPointerLeave={() => showMedia(null)} onFocus={(event) => { const bounds = event.currentTarget.getBoundingClientRect(); showMedia(info.row.original.mediaCaptureId ?? null, bounds.right, bounds.top) }} onBlur={() => showMedia(null)}><CachedListingImage captureId={info.row.original.mediaCaptureId} alt="" className="block size-9 min-w-9 rounded border border-border object-contain text-[8px] text-muted-foreground" /></span> }),
+  helper.accessor('manufacturer', { header: 'Manufacturer', cell: (info) => info.getValue() ? <button type="button" aria-label={`Filter manufacturer: ${info.getValue()}`} title={`Show only ${info.getValue()}`} className="text-left hover:text-primary hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring" onClick={() => filterTo('manufacturer', info.getValue()!)}>{info.getValue()}</button> : '—' }),
   helper.accessor('productTitle', { header: 'Title', cell: (info) => <Link className="block min-w-48 max-w-xl truncate text-primary hover:underline" title={info.getValue()} to="/listings/$listingId" params={{ listingId: info.row.original.id }}>{displayListingTitle(info.getValue(), info.row.original.sku)}</Link> }),
-  helper.accessor('category', { header: 'Category', cell: (info) => info.getValue() || '—' }),
+  helper.accessor('category', { header: 'Category', cell: (info) => info.getValue() ? <button type="button" aria-label={`Filter category: ${info.getValue()}`} title={`Show only ${info.getValue()}`} className="text-left hover:text-primary hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring" onClick={() => filterTo('category', info.getValue()!)}>{info.getValue()}</button> : '—' }),
   helper.accessor('sku', { header: 'SKU', cell: (info) => info.getValue() || '—' }),
   helper.accessor((listing) => Number(listing.price ?? 0), { id: 'price', header: 'Price', cell: (info) => money(info.row.original.price, info.row.original.currency) }),
   helper.accessor('compareAtPrice', { header: 'Was', cell: (info) => info.getValue() && Number(info.getValue()) > Number(info.row.original.price ?? 0) ? <span className="text-muted-foreground line-through">{money(info.getValue(), info.row.original.currency)}</span> : '—' }),
   helper.accessor((listing) => listingDiscount(listing)?.percent ?? -1, { id: 'discount', header: 'Off', cell: (info) => info.getValue() >= 0 ? `${Math.round(info.getValue())}%` : '—' }),
-  helper.accessor('available', { header: 'Stock', cell: (info) => <span title={info.row.original.stockQuantity === null ? 'Source reports availability; quantity unknown' : 'Source-reported quantity and availability'} className={info.getValue() ? 'text-foreground' : 'text-muted-foreground'}>{stockLabel(info.getValue(), info.row.original.stockQuantity)}</span> }),
+  helper.accessor('available', { header: 'Stock', cell: (info) => <span className={info.getValue() ? 'text-foreground' : 'text-muted-foreground'}>{info.getValue() ? 'In stock' : 'Out'}</span> }),
+  helper.accessor((listing) => listing.stockQuantity ?? undefined, { id: 'quantity', header: 'Qty', sortUndefined: 'last', cell: (info) => <span title={info.row.original.stockQuantity === null ? 'Source did not report a numeric quantity' : 'Source-reported quantity'} className="font-mono tabular-nums">{info.row.original.stockQuantity?.toLocaleString() ?? '—'}</span> }),
   ...(showResearch ? [
     helper.display({ id: 'research-asking', header: 'Research asking', cell: (info) => researchValue(researchSummaries, info.row.original.id, 'active_asking') }),
     helper.display({ id: 'research-sold', header: 'Research sold', cell: (info) => researchValue(researchSummaries, info.row.original.id, 'completed_sale') }),
@@ -86,7 +87,8 @@ export function CurrentListingsTable({ listings, savedViews, watchedListingIds =
   const deleteView = useServerFn(deleteListingView)
   const [sorting, setSorting] = useState<SortingState>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [hoveredMediaId, setHoveredMediaId] = useState<string | null>(null)
+  const [hoveredMedia, setHoveredMedia] = useState<{ id: string; left: number; top: number } | null>(null)
+  const previewRef = useRef<HTMLDivElement>(null)
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(50)
   const watched = useMemo(() => new Set(watchedListingIds), [watchedListingIds])
@@ -96,6 +98,16 @@ export function CurrentListingsTable({ listings, savedViews, watchedListingIds =
     setFilters((current) => ({ ...current, [key]: value }))
     setSelectedViewId('')
     setPage(0)
+  }
+  function showMedia(id: string | null, x?: number, y?: number) {
+    if (!id || x === undefined || y === undefined) { setHoveredMedia(null); return }
+    setHoveredMedia({ id, ...imagePreviewPosition(x, y, window.innerWidth, window.innerHeight) })
+  }
+  function moveMedia(x: number, y: number) {
+    if (!previewRef.current) return
+    const position = imagePreviewPosition(x, y, window.innerWidth, window.innerHeight)
+    previewRef.current.style.left = `${position.left}px`
+    previewRef.current.style.top = `${position.top}px`
   }
   function loadView(id: string) {
     const view = savedViews.find((item) => item.id === id)
@@ -128,12 +140,12 @@ export function CurrentListingsTable({ listings, savedViews, watchedListingIds =
   const showVariants = listings.some((item) => item.variantTitle && item.variantTitle !== 'Default Title')
   const showModules = new Set(listings.map((item) => item.moduleId)).size > 1
   const showResearch = Object.keys(researchSummaries).length > 0
-  const table = useTable({ features, data, columns: makeColumns(selected, toggle, showVariants, showModules, setHoveredMediaId, watched, researchSummaries, showResearch), state: { sorting }, onSortingChange: setSorting })
+  const table = useTable({ features, data, columns: makeColumns(selected, toggle, showVariants, showModules, showMedia, moveMedia, (key, value) => updateFilter(key, value), watched, researchSummaries, showResearch), state: { sorting }, onSortingChange: setSorting })
   const rows = table.getRowModel().rows
   const pageCount = Math.max(1, Math.ceil(rows.length / pageSize))
   const safePage = Math.min(page, pageCount - 1)
   return <div>
-    {hoveredMediaId ? <div className="pointer-events-none fixed bottom-3 right-3 z-50 flex size-64 items-center justify-center rounded border border-border bg-card p-2 shadow-xl" role="img" aria-label="Larger captured listing image"><img src={mediaUrl(hoveredMediaId, 'preview')} alt="" className="max-h-full max-w-full object-contain" /></div> : null}
+    {hoveredMedia ? <div ref={previewRef} className="pointer-events-none fixed z-50 flex size-64 max-h-[calc(100vh-16px)] max-w-[calc(100vw-16px)] items-center justify-center rounded border border-border bg-card p-2 shadow-xl" style={{ left: hoveredMedia.left, top: hoveredMedia.top }} role="img" aria-label="Larger captured listing image"><img src={mediaUrl(hoveredMedia.id, 'preview')} alt="" className="max-h-full max-w-full object-contain" /></div> : null}
     {selected.size ? <ExportPanel listingIds={[...selected]} /> : null}
     <div className="mb-1 flex flex-wrap items-center gap-1.5"><div className="w-full shrink-0 sm:w-72 lg:w-80"><Input aria-label="Search current listings" className="h-8 text-xs" placeholder="Search title, SKU, tag…" value={filters.query} onChange={(event) => updateFilter('query', event.target.value)} /></div><FilterSelect label="Categories" value={filters.category} values={options.categories} onChange={(value) => updateFilter('category', value)} /><FilterSelect label="Manufacturers" value={filters.manufacturer} values={options.manufacturers} onChange={(value) => updateFilter('manufacturer', value)} /><select aria-label="Sources" value={filters.sourceId} onChange={(event) => updateFilter('sourceId', event.target.value)} className="h-8 max-w-48 rounded border border-border bg-background px-1.5 text-xs text-foreground"><option value="">All sources</option>{options.sources.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select><select aria-label="Stock" value={filters.stock} onChange={(event) => updateFilter('stock', event.target.value as ListingFilters['stock'])} className="h-8 rounded border border-border bg-background px-1.5 text-xs text-foreground"><option value="all">All stock</option><option value="in">In stock</option><option value="out">Out</option></select><span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">{rows.length.toLocaleString()} listings</span></div>
     <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs"><NumberFilter label="Price min" value={filters.minPrice} onChange={(value) => updateFilter('minPrice', value)} /><NumberFilter label="Price max" value={filters.maxPrice} onChange={(value) => updateFilter('maxPrice', value)} /><NumberFilter label="Off min" value={filters.minDiscountAmount} onChange={(value) => updateFilter('minDiscountAmount', value)} /><NumberFilter label="Off max" value={filters.maxDiscountAmount} onChange={(value) => updateFilter('maxDiscountAmount', value)} /><NumberFilter label="Off % min" value={filters.minDiscountPercent} max={100} onChange={(value) => updateFilter('minDiscountPercent', value)} /><NumberFilter label="Off % max" value={filters.maxDiscountPercent} max={100} onChange={(value) => updateFilter('maxDiscountPercent', value)} /><button type="button" onClick={() => loadView('')} className="text-primary hover:underline">Clear</button><div className="ml-auto flex flex-wrap items-center gap-1.5"><select aria-label="Saved views" value={selectedViewId} onChange={(event) => loadView(event.target.value)} className="h-8 max-w-48 rounded border border-border bg-background px-1.5 text-xs text-foreground"><option value="">Current filters</option>{savedViews.map((view) => <option key={view.id} value={view.id}>{view.name}</option>)}</select><div className="w-36 shrink-0"><Input aria-label="View name" className="h-8 text-xs" maxLength={80} placeholder="View name" value={viewName} onChange={(event) => setViewName(event.target.value)} /></div><button type="button" disabled={viewBusy || !viewName.trim()} onClick={() => void saveCurrentView()} className="h-8 whitespace-nowrap rounded bg-primary px-2 text-primary-foreground disabled:opacity-50">Save view</button>{selectedViewId ? <button type="button" disabled={viewBusy} onClick={() => void removeCurrentView()} className="h-8 rounded border border-border px-2 text-destructive disabled:opacity-50">Delete</button> : null}{viewError ? <span role="alert" className="text-destructive">{viewError}</span> : null}</div></div>
