@@ -19,7 +19,9 @@
     "start": "node .output/server/index.mjs",
     "test": "vitest run --config vitest.config.ts",
     "test:integration": "vitest run --config vitest.config.ts src/features/sources/sources.integration.test.ts",
-    "typecheck": "tsc6 --noEmit"
+    "typecheck": "tsc6 --noEmit",
+    "docker:build": "docker build --tag hoardcore:local .",
+    "docker:smoke": "docker run --rm --entrypoint node hoardcore:local -e \"require('sharp')({ create: { width: 1, height: 1, channels: 4, background: 'transparent' } }).png().toBuffer().then(() => console.log('sharp OK'))\""
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "^1.7.5",

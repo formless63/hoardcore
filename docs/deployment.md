@@ -50,6 +50,21 @@ docker compose up -d --build
 curl -fsS http://127.0.0.1:3000/api/ready
 ```
 
+### Verify a production image
+
+The runtime stage contains only production dependencies, while retaining
+Nitro's external runtime packages and Sharp's Alpine/musl native addon. Before
+pushing a locally built image, verify the native image pipeline without
+starting the application or contacting a source:
+
+```sh
+pnpm docker:build
+pnpm docker:smoke
+```
+
+`docker:smoke` runs a one-pixel Sharp conversion inside the built image. It
+does not need application configuration or a database.
+
 For upgrades, take a backup first, then rebuild/restart the same app service. A migration failure
 stops the app instance and leaves readiness unavailable; inspect `docker compose logs app` before
 retrying. Do not start multiple app instances against the same database during an upgrade.
