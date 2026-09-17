@@ -40,6 +40,7 @@ function SettingsPage() {
       <h1 className="mb-3 text-base font-semibold text-foreground">Settings</h1>
       <Link to="/settings/alerts" className="mb-3 inline-block text-xs text-primary underline">Notification settings and alert rules</Link>
       <Link to="/settings/research-tokens" className="mb-3 ml-3 inline-block text-xs text-primary underline">Research API tokens</Link>
+      <Link to="/settings/category-groups" className="mb-3 ml-3 inline-block text-xs text-primary underline">Category mappings</Link>
       <form className="max-w-xl rounded-md border border-border bg-card p-4" onSubmit={(event) => void submit(event)}>
         <h2 className="text-sm font-semibold text-foreground">Collection defaults</h2>
         <label className="mt-3 block text-xs text-muted-foreground" htmlFor="default-request-limit">Default request ceiling</label>

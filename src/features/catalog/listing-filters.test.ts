@@ -4,7 +4,7 @@ import { emptyListingFilters, listingDiscount, listingFiltersSchema, matchesList
 
 const listing = currentListingSchema.parse({
   id: 'listing-1', url: 'https://example.test/item', sourceId: 'source-1', sourceName: 'Source one', moduleId: 'test',
-  productId: 'product-1', productTitle: 'Example relay', manufacturer: 'Example maker', category: 'Controls', tags: ['surplus', 'relay'],
+  productId: 'product-1', productTitle: 'Example relay', manufacturer: 'Example maker', category: 'Controls', categoryGroup: 'controls', tags: ['surplus', 'relay'],
   variantId: 'variant-1', variantTitle: 'Default Title', sku: 'ABC-1', imageUrl: null,
   title: 'Example relay', price: '60.00', compareAtPrice: '100.00', currency: null, available: true, stockQuantity: null, observedAt: new Date('2026-09-16T00:00:00Z'),
 })
@@ -32,11 +32,11 @@ describe('saved listing filter contract', () => {
   })
 
   it('supports grouped filters and legacy saved views without a group', () => {
-    const panel = { ...listing, category: 'Load Centers - Copper Bus' }
+    const panel = { ...listing, category: 'Load Centers - Copper Bus', categoryGroup: 'distribution' }
     expect(matchesListingFilters(panel, { ...emptyListingFilters, categoryGroup: 'distribution' })).toBe(true)
     expect(matchesListingFilters(panel, { ...emptyListingFilters, categoryGroup: 'lighting' })).toBe(false)
     expect(matchesListingFilters(panel, { ...emptyListingFilters, categoryGroup: 'distribution', category: 'Panelboards & Accessories' })).toBe(false)
-    expect(matchesListingFilters({ ...listing, category: 'Steel' }, { ...emptyListingFilters, categoryGroup: 'unmapped' })).toBe(true)
+    expect(matchesListingFilters({ ...listing, category: 'Steel', categoryGroup: 'unmapped' }, { ...emptyListingFilters, categoryGroup: 'unmapped' })).toBe(true)
     const { categoryGroup: _omitted, ...previousVersionView } = emptyListingFilters
     expect(listingFiltersSchema.parse(previousVersionView).categoryGroup).toBe('')
   })

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { CurrentListing } from './catalog.schemas'
-import { categoryGroupFor, categoryGroups, unmappedCategoryGroup } from './category-groups'
+import { categoryGroups, unmappedCategoryGroup } from './category-groups'
 
 const amount = z.number().finite().nonnegative().max(1_000_000_000).nullable()
 const percent = z.number().finite().min(0).max(100).nullable()
@@ -47,7 +47,7 @@ export function listingDiscount(listing: Pick<CurrentListing, 'price' | 'compare
 export function matchesListingFilters(listing: CurrentListing, filters: ListingFilters): boolean {
   const needle = filters.query.toLowerCase()
   if (needle && ![listing.productTitle, listing.variantTitle, listing.manufacturer, listing.category, listing.sourceName, listing.moduleId, listing.sku, ...listing.tags].some((value) => value?.toLowerCase().includes(needle))) return false
-  if (filters.categoryGroup && categoryGroupFor(listing.category) !== filters.categoryGroup) return false
+  if (filters.categoryGroup && listing.categoryGroup !== filters.categoryGroup) return false
   if (filters.category && listing.category !== filters.category) return false
   if (filters.manufacturer && listing.manufacturer !== filters.manufacturer) return false
   if (filters.sourceId && listing.sourceId !== filters.sourceId) return false

@@ -78,6 +78,13 @@
       "when": 1789622681437,
       "tag": "0010_charming_stingray",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789623018430,
+      "tag": "0011_silky_gladiator",
+      "breakpoints": true
     }
   ]
 }

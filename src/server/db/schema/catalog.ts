@@ -1,4 +1,4 @@
-import { boolean, index, integer, jsonb, numeric, pgEnum, pgTable, serial, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { boolean, index, integer, jsonb, numeric, pgEnum, pgTable, primaryKey, serial, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 import { catalogSources } from './catalog-sources'
 
@@ -14,6 +14,22 @@ export const catalogProducts = pgTable('catalog_products', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })
+
+/**
+ * An operator's source-specific interpretation of a raw product category.
+ * The raw category always remains on catalog_products; this only controls the
+ * internal grouping used by review filters and saved-view alerts.
+ */
+export const sourceCategoryGroupOverrides = pgTable('source_category_group_overrides', {
+  sourceId: uuid('source_id').notNull().references(() => catalogSources.id, { onDelete: 'cascade' }),
+  sourceCategory: text('source_category').notNull(),
+  categoryGroup: text('category_group').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.sourceId, table.sourceCategory], name: 'source_category_group_overrides_pk' }),
+  index('source_category_group_overrides_group_idx').on(table.categoryGroup),
+])
 
 export const collectionRunStatus = pgEnum('collection_run_status', ['queued', 'running', 'succeeded', 'partial', 'not_modified', 'failed'])
 export const collectionRuns = pgTable('collection_runs', {
@@ -100,7 +116,7 @@ export const sourceEvidence = pgTable('source_evidence', {
   sha256: text('sha256'),
 }, (table) => [uniqueIndex('source_evidence_run_unique_idx').on(table.runId)])
 
-export const catalogSchema = { catalogProducts, collectionRuns, collectionRunEvents, catalogVariants, sourceListings, sourceListingCurrent, sourceListingObservations, sourceEvidence }
+export const catalogSchema = { catalogProducts, sourceCategoryGroupOverrides, collectionRuns, collectionRunEvents, catalogVariants, sourceListings, sourceListingCurrent, sourceListingObservations, sourceEvidence }
 export type CatalogProduct = typeof catalogProducts.$inferSelect
 export type CatalogVariant = typeof catalogVariants.$inferSelect
 export type SourceListing = typeof sourceListings.$inferSelect

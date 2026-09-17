@@ -1,9 +1,10 @@
 import type { NormalizedCatalogRecord } from '../../modules/types'
-import { eq } from 'drizzle-orm'
-import { catalogProducts, catalogVariants, collectionRuns, sourceEvidence, sourceListingCurrent, sourceListingObservations, sourceListings } from './schema/catalog'
+import { and, eq } from 'drizzle-orm'
+import { catalogProducts, catalogVariants, collectionRuns, sourceCategoryGroupOverrides, sourceEvidence, sourceListingCurrent, sourceListingObservations, sourceListings } from './schema/catalog'
 import { catalogSources } from './schema/catalog-sources'
 import type { Database } from './db.server'
 import { getListingMediaCaptures } from '~/features/media/media.server'
+import { resolvedCategoryGroup } from '~/features/catalog/category-overrides.server'
 
 export interface CatalogObservationInput {
   observedAt?: Date
@@ -22,6 +23,7 @@ export async function listCurrentCatalogListings(db: Database) {
     productTitle: catalogProducts.title,
     manufacturer: catalogProducts.brand,
     category: catalogProducts.productType,
+    categoryGroupOverride: sourceCategoryGroupOverrides.categoryGroup,
     tags: catalogProducts.tags,
     variantId: catalogVariants.id,
     variantTitle: catalogVariants.title,
@@ -39,8 +41,16 @@ export async function listCurrentCatalogListings(db: Database) {
     .innerJoin(catalogSources, eq(catalogSources.id, sourceListings.sourceId))
     .innerJoin(catalogProducts, eq(catalogProducts.id, sourceListings.productId))
     .innerJoin(catalogVariants, eq(catalogVariants.id, sourceListings.variantId))
+    .leftJoin(sourceCategoryGroupOverrides, and(
+      eq(sourceCategoryGroupOverrides.sourceId, sourceListings.sourceId),
+      eq(sourceCategoryGroupOverrides.sourceCategory, catalogProducts.productType),
+    ))
   const captures = await getListingMediaCaptures(db, listings.map((listing) => listing.id))
-  return listings.map((listing) => ({ ...listing, mediaCaptureId: captures.get(listing.id)?.id ?? null }))
+  return listings.map(({ categoryGroupOverride, ...listing }) => ({
+    ...listing,
+    categoryGroup: resolvedCategoryGroup(listing.category, categoryGroupOverride),
+    mediaCaptureId: captures.get(listing.id)?.id ?? null,
+  }))
 }
 
 /** Atomically reconciles current catalog state while retaining every supplied observation. */

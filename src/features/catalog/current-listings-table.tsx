@@ -13,7 +13,7 @@ import { WatchButton } from '~/features/watchlist/watch-button'
 import type { ResearchSummariesByListing, ResearchComparableSummaryType } from '~/features/research/research.server'
 import { displayListingTitle } from './display-listing-title'
 import { imagePreviewPosition } from './image-preview-position'
-import { categoryGroupFor, categoryGroups, unmappedCategoryGroup } from './category-groups'
+import { categoryGroups, unmappedCategoryGroup } from './category-groups'
 import { listingPriceSortValue } from './listing-sort-values'
 import { type listingWorkbenchSearchSchema } from './listing-workbench-state'
 import type { z } from 'zod'
@@ -107,20 +107,20 @@ export function CurrentListingsTable({ listings, savedViews, watchedListingIds =
   const groupCounts = useMemo(() => {
     const counts = new Map<string, number>()
     for (const listing of listings) {
-      const group = categoryGroupFor(listing.category)
+      const group = listing.categoryGroup
       counts.set(group, (counts.get(group) ?? 0) + 1)
     }
     return counts
   }, [listings])
   const visibleCategories = useMemo(() => filters.categoryGroup
-    ? options.categories.filter((category) => categoryGroupFor(category) === filters.categoryGroup)
+    ? [...new Set(listings.filter((listing) => listing.categoryGroup === filters.categoryGroup).map((listing) => listing.category).filter((category): category is string => Boolean(category)))].sort()
     : options.categories, [options.categories, filters.categoryGroup])
   const data = useMemo(() => listings.filter((item) => matchesListingFilters(item, filters)), [listings, filters])
   function updateFilter<K extends keyof ListingFilters>(key: K, value: ListingFilters[K]) {
     const nextFilters = {
       ...filters,
       [key]: value,
-      ...(key === 'categoryGroup' && value && filters.category && categoryGroupFor(filters.category) !== value ? { category: '' } : {}),
+      ...(key === 'categoryGroup' && value && filters.category && !listings.some((listing) => listing.category === filters.category && listing.categoryGroup === value) ? { category: '' } : {}),
     }
     void navigate({ search: (current) => ({ ...current, filters: nextFilters, page: 0 }) })
     setSelectedViewId('')
