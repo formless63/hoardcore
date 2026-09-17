@@ -1,6 +1,6 @@
 /** Compact, theme-aware adaptation of the supplied Hoardcore header mark. */
 export function HoardcoreWordmark() {
-  return <svg aria-hidden="true" focusable="false" viewBox="0 0 430 72" className="h-9 w-auto max-w-full overflow-visible" xmlns="http://www.w3.org/2000/svg">
+  return <svg aria-hidden="true" focusable="false" viewBox="0 0 430 72" className="h-6 w-auto max-w-full overflow-visible sm:h-9" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <filter id="hoardcore-wordmark-glow" x="-20%" y="-30%" width="140%" height="160%">
         <feGaussianBlur stdDeviation="3" result="glow" />

@@ -38,7 +38,7 @@ export function ThemeModeToggle() {
       title={`Switch to ${switchingTo} mode`}
       disabled={!mounted}
       onClick={toggleMode}
-      className="inline-flex size-9 items-center justify-center rounded-md border border-input bg-background text-foreground shadow-xs transition hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50"
+      className="inline-flex size-8 items-center justify-center rounded-md border border-input bg-background text-foreground shadow-xs transition hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:size-9"
     >
       {resolvedTheme === 'dark' ? <SunIcon /> : <MoonIcon />}
     </button>

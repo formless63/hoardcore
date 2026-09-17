@@ -20,7 +20,8 @@ export function ListingsPending() {
 export function ListingDetailPending() {
   return <main id="main-content" aria-busy="true" aria-label="Loading listing detail" className="w-full px-2 py-3 sm:px-3">
     <Block className="h-4 w-20" />
-    <div className="mt-3 flex flex-wrap gap-4"><Block className="size-72 max-w-full shrink-0" /><div className="min-w-72 flex-1"><Block className="h-6 w-3/4 max-w-xl" /><Block className="mt-2 h-3 w-32" /><div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">{Array.from({ length: 7 }, (_, index) => <div key={index}><Block className="h-3 w-14" /><Block className="mt-2 h-4 w-24 max-w-full" /></div>)}</div></div></div>
+    <Block className="mt-4 h-3 w-28" /><Block className="mt-2 h-7 w-full max-w-xl" />
+    <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] lg:gap-6"><Block className="aspect-square w-full max-w-sm" /><div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{Array.from({ length: 7 }, (_, index) => <div key={index} className="min-w-0"><Block className="h-3 w-14 max-w-full" /><Block className="mt-2 h-4 w-24 max-w-full" /></div>)}</div></div>
     <Block className="mt-5 h-16 w-full" /><Block className="mt-5 h-20 w-full" />
   </main>
 }

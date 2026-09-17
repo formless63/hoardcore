@@ -9,7 +9,7 @@ export function ThemeSelector() {
       <span className="hidden md:inline">Theme</span>
       <select
         aria-label="Theme preset"
-        className="h-9 rounded-md border border-input bg-background px-2.5 text-sm text-foreground shadow-xs outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/30"
+        className="h-8 w-[4.5rem] rounded-md border border-input bg-background px-1 text-xs text-foreground shadow-xs outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/30 sm:h-9 sm:w-auto sm:px-2.5 sm:text-sm"
         value={activeTheme}
         onChange={(event) => setActiveTheme(event.target.value as AppTheme)}
       >

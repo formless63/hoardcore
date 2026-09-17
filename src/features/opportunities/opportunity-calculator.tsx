@@ -17,7 +17,7 @@ export function OpportunityCalculator({ price, currency }: { price: string | nul
   return <section className="mt-4 border-t border-border pt-3" aria-label="Opportunity calculator">
     <div className="flex flex-wrap items-baseline justify-between gap-2"><h2 className="text-sm font-medium">Quick margin check</h2><span className="text-[11px] text-muted-foreground">Local estimate · not saved</span></div>
     <p className="mt-1 text-xs text-muted-foreground">At the current source price of {price === null ? 'unknown' : money(acquisition)}, test a resale scenario. Taxes and unentered costs are excluded.</p>
-    <div className="mt-3 grid gap-2 sm:grid-cols-4">{[
+    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">{[
       { label: 'Resale price', value: resale, set: setResale },
       { label: 'Marketplace fee %', value: feePercent, set: setFeePercent },
       { label: 'Shipping', value: shipping, set: setShipping },

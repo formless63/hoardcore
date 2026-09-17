@@ -61,7 +61,7 @@ function RootDocument({ children }: { children: ReactNode }) {
               Skip to content
             </a>
             {!isLoginPage ? <header className="sticky top-0 z-40 border-b border-border bg-card/90 backdrop-blur">
-              <div className="mx-auto flex w-full max-w-[1800px] flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2 sm:flex-nowrap sm:px-5">
+              <div className="mx-auto flex w-full max-w-[1800px] flex-wrap items-center gap-x-2 gap-y-1.5 px-2 py-1.5 sm:flex-nowrap sm:gap-x-4 sm:px-5 sm:py-2">
                 <div className="flex min-w-0 items-center">
                   <Link
                     to="/"
@@ -108,10 +108,10 @@ function RootDocument({ children }: { children: ReactNode }) {
                   </Link>
                   <Link to="/settings" className="shrink-0 rounded-sm border border-transparent px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-border hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:border-primary/40 [&[data-status=active]]:bg-primary/10 [&[data-status=active]]:text-foreground">Settings</Link>
                 </nav>
-                <div className="ml-auto flex shrink-0 items-center gap-2">
+                <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
                   {session.data ? (
-                    <button className="rounded-sm px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring" onClick={() => void authClient.signOut()} type="button">
-                      Sign out
+                    <button aria-label="Sign out" title="Sign out" className="rounded-sm px-1 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:px-2" onClick={() => void authClient.signOut()} type="button">
+                      <span className="sm:hidden">Exit</span><span className="hidden sm:inline">Sign out</span>
                     </button>
                   ) : (
                     <Link className="rounded-sm px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring" to="/login">Sign in</Link>
