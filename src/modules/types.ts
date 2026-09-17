@@ -41,6 +41,8 @@ export interface NormalizedSourceListing {
     compareAtPrice?: number
     currency?: string
     available: boolean
+    /** Source-reported count, when supplied; absence is not zero. */
+    stockQuantity?: number
   }
   observedAt?: string
 }

@@ -5,6 +5,7 @@ import { catalogSources } from '~/server/db/schema'
 import {
   createCatalogSourceInDatabase,
   listCatalogSourcesFromDatabase,
+  updateSourceScheduleInDatabase,
 } from './sources.server'
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL
@@ -64,5 +65,18 @@ describeWithDatabase('catalog source persistence', () => {
         config: { catalogUrl: `https://${host}/collections/sale/` },
       }),
     ).rejects.toThrow('That source is already registered')
+  })
+
+  it('stores an opt-in schedule and can pause collection without deleting the source', async () => {
+    const host = `example-${crypto.randomUUID()}.myshopify.com`
+    const created = await createCatalogSourceInDatabase({ displayName: 'Scheduled source', moduleId: 'shopify', config: { catalogUrl: `https://${host}/collections/sale` } })
+    createdSourceIds.push(created.id)
+    expect(created.scheduleHours).toBeNull()
+    expect(created.nextRunAt).toBeNull()
+    const scheduled = await updateSourceScheduleInDatabase({ sourceId: created.id, collectionEnabled: true, scheduleHours: 72, scheduleRequestLimit: 10 })
+    expect(scheduled).toMatchObject({ collectionEnabled: true, scheduleHours: 72, scheduleRequestLimit: 10 })
+    expect(scheduled.nextRunAt).not.toBeNull()
+    const paused = await updateSourceScheduleInDatabase({ sourceId: created.id, collectionEnabled: false, scheduleHours: 72, scheduleRequestLimit: 10 })
+    expect(paused).toMatchObject({ collectionEnabled: false, nextRunAt: null })
   })
 })

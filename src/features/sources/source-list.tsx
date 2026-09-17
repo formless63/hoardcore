@@ -6,6 +6,7 @@ import type { CatalogSourceSummary } from './sources.schemas'
 import { SourceStatusBadge } from './source-status-badge'
 import { SourceRunControl } from './source-run-control'
 import { MediaRunControl } from './media-run-control'
+import { SourceScheduleControl } from './source-schedule-control'
 import type { listMediaCaptureRuns } from '~/features/media/media.functions'
 
 const createdDateFormatter = new Intl.DateTimeFormat('en', {
@@ -57,7 +58,7 @@ export function SourceList({
               <p className="mt-1 truncate text-sm text-muted-foreground">{source.summary}</p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-3 sm:justify-end">
-              <SourceRunControl sourceId={source.id} run={latestRuns[source.id]} defaultRequestLimit={defaultRequestLimit} />
+              <SourceRunControl sourceId={source.id} run={latestRuns[source.id]} defaultRequestLimit={defaultRequestLimit} disabled={!source.collectionEnabled} />
               <MediaRunControl sourceId={source.id} enabled={mediaCaptureEnabled} run={latestMediaRuns[source.id]} />
               <div className="flex items-center gap-4">
               <SourceStatusBadge status={source.status} />
@@ -71,6 +72,7 @@ export function SourceList({
               </div>
             </div>
           </article>
+          <SourceScheduleControl source={source} />
         </li>
       ))}
     </ul>

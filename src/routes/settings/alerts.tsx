@@ -1,15 +1,17 @@
-import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
+import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import { useState, type FormEvent } from 'react'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
-import { getPublicSession } from '~/features/auth/auth.functions'
 import { getNotificationSettings, listAlertSubscriptions, saveNotificationSettings, saveSavedViewAlertPreference, saveWatchedAlertPreference } from '~/features/alerts/alerts.functions'
+import { SettingsLoadError, SettingsPending } from '~/features/settings/settings-load-state'
 
 export const Route = createFileRoute('/settings/alerts')({
-  beforeLoad: async () => { if (!(await getPublicSession())) throw redirect({ to: '/login' }) },
   loader: async () => ({ settings: await getNotificationSettings(), subscriptions: await listAlertSubscriptions() }),
   head: () => ({ meta: [{ title: 'Notification settings · Hoardcore' }] }),
+  pendingMs: 100,
+  pendingComponent: SettingsPending,
+  errorComponent: SettingsLoadError,
   component: AlertSettingsPage,
 })
 

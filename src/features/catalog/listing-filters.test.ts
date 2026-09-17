@@ -6,7 +6,7 @@ const listing = currentListingSchema.parse({
   id: 'listing-1', url: 'https://example.test/item', sourceId: 'source-1', sourceName: 'Source one', moduleId: 'test',
   productId: 'product-1', productTitle: 'Example relay', manufacturer: 'Example maker', category: 'Controls', tags: ['surplus', 'relay'],
   variantId: 'variant-1', variantTitle: 'Default Title', sku: 'ABC-1', imageUrl: null,
-  title: 'Example relay', price: '60.00', compareAtPrice: '100.00', currency: null, available: true, observedAt: new Date('2026-09-16T00:00:00Z'),
+  title: 'Example relay', price: '60.00', compareAtPrice: '100.00', currency: null, available: true, stockQuantity: null, observedAt: new Date('2026-09-16T00:00:00Z'),
 })
 
 describe('saved listing filter contract', () => {

@@ -67,6 +67,7 @@ async function startWorkerInternal(runtime: WorkerRuntimeState, pool: Pool): Pro
   runtime.runner = await run({
     pgPool: pool,
     taskList: taskRegistry,
+    crontab: '* * * * * catalog.schedule ?id=hoardcore-source-schedule',
     concurrency: 1,
     noHandleSignals: true,
   })

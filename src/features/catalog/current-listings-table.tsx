@@ -12,6 +12,7 @@ import { CachedListingImage, mediaUrl } from '~/features/media/cached-listing-im
 import { WatchButton } from '~/features/watchlist/watch-button'
 import type { ResearchSummariesByListing, ResearchComparableSummaryType } from '~/features/research/research.server'
 import { displayListingTitle } from './display-listing-title'
+import { stockLabel } from './stock-label'
 
 const features = tableFeatures({ rowSortingFeature, sortedRowModel: createSortedRowModel() })
 const helper = createColumnHelper<typeof features, CurrentListing>()
@@ -50,7 +51,7 @@ function makeColumns(selected: Set<string>, toggle: (id: string) => void, showVa
   helper.accessor((listing) => Number(listing.price ?? 0), { id: 'price', header: 'Price', cell: (info) => money(info.row.original.price, info.row.original.currency) }),
   helper.accessor('compareAtPrice', { header: 'Was', cell: (info) => info.getValue() && Number(info.getValue()) > Number(info.row.original.price ?? 0) ? <span className="text-muted-foreground line-through">{money(info.getValue(), info.row.original.currency)}</span> : '—' }),
   helper.accessor((listing) => listingDiscount(listing)?.percent ?? -1, { id: 'discount', header: 'Off', cell: (info) => info.getValue() >= 0 ? `${Math.round(info.getValue())}%` : '—' }),
-  helper.accessor('available', { header: 'Stock', cell: (info) => <span title="Source reports availability, not a quantity" className={info.getValue() ? 'text-foreground' : 'text-muted-foreground'}>{info.getValue() ? 'In stock' : 'Out'}</span> }),
+  helper.accessor('available', { header: 'Stock', cell: (info) => <span title={info.row.original.stockQuantity === null ? 'Source reports availability; quantity unknown' : 'Source-reported quantity and availability'} className={info.getValue() ? 'text-foreground' : 'text-muted-foreground'}>{stockLabel(info.getValue(), info.row.original.stockQuantity)}</span> }),
   ...(showResearch ? [
     helper.display({ id: 'research-asking', header: 'Research asking', cell: (info) => researchValue(researchSummaries, info.row.original.id, 'active_asking') }),
     helper.display({ id: 'research-sold', header: 'Research sold', cell: (info) => researchValue(researchSummaries, info.row.original.id, 'completed_sale') }),

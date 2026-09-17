@@ -6,7 +6,7 @@ export const currentListingSchema = z.object({
   variantId: z.string(), variantTitle: z.string().nullable(), sku: z.string().nullable(), imageUrl: z.string().nullable(),
   mediaCaptureId: z.string().nullish(),
   title: z.string(), price: z.string().nullable(), compareAtPrice: z.string().nullable(), currency: z.string().nullable(),
-  available: z.boolean(), observedAt: z.date(),
+  available: z.boolean(), stockQuantity: z.number().int().nullable(), observedAt: z.date(),
 })
 export const currentListingsResponseSchema = z.object({ listings: z.array(currentListingSchema) })
 export type CurrentListing = z.infer<typeof currentListingSchema>

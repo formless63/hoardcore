@@ -15,6 +15,7 @@ export const shopifyVariantSchema = z.object({
   price: z.union([z.string(), z.number()]).optional(),
   compare_at_price: z.union([z.string(), z.number()]).nullable().optional(),
   available: z.boolean().optional(),
+  inventory_quantity: z.number().int().nullable().optional(),
   featured_image: z.object({ src: optionalUrl }).nullable().optional(),
 })
 
@@ -120,7 +121,7 @@ export function normalizeShopifyCollection(
           variantKey,
           url: `${storefrontOrigin}/products/${product.handle}?variant=${variant.id}`,
           imageUrl,
-          current: { title: product.title, price, compareAtPrice, available },
+          current: { title: product.title, price, compareAtPrice, available, stockQuantity: variant.inventory_quantity ?? undefined },
           observedAt: context.observedAt,
         },
       } satisfies NormalizedCatalogRecord

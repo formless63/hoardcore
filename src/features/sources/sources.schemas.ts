@@ -25,6 +25,10 @@ export const catalogSourceSummarySchema = z.object({
   moduleId: z.string(),
   moduleName: z.string(),
   status: catalogSourceStatusSchema,
+  collectionEnabled: z.boolean(),
+  scheduleHours: z.union([z.literal(24), z.literal(72), z.literal(168)]).nullable(),
+  scheduleRequestLimit: manualCollectionRequestLimitSchema,
+  nextRunAt: z.string().nullable(),
   summary: z.string(),
   createdAt: z.string(),
 })
@@ -32,3 +36,11 @@ export const catalogSourceSummarySchema = z.object({
 export type CatalogSourceStatus = z.infer<typeof catalogSourceStatusSchema>
 export type CreateCatalogSourceInput = z.infer<typeof createCatalogSourceInputSchema>
 export type CatalogSourceSummary = z.infer<typeof catalogSourceSummarySchema>
+
+export const updateSourceScheduleSchema = z.object({
+  sourceId: z.uuid(),
+  collectionEnabled: z.boolean(),
+  scheduleHours: z.union([z.literal(24), z.literal(72), z.literal(168)]).nullable(),
+  scheduleRequestLimit: manualCollectionRequestLimitSchema,
+})
+export type UpdateSourceScheduleInput = z.infer<typeof updateSourceScheduleSchema>

@@ -1,13 +1,15 @@
-import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
+import { createFileRoute, useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import { useState } from 'react'
-import { getPublicSession } from '~/features/auth/auth.functions'
 import { createResearchAgentToken, listResearchAgentTokens, revokeResearchAgentToken } from '~/features/research/research.functions'
+import { SettingsLoadError, SettingsPending } from '~/features/settings/settings-load-state'
 
 export const Route = createFileRoute('/settings/research-tokens')({
-  beforeLoad: async () => { if (!(await getPublicSession())) throw redirect({ to: '/login' }) },
   loader: () => listResearchAgentTokens(),
   head: () => ({ meta: [{ title: 'Research API tokens · Hoardcore' }] }),
+  pendingMs: 100,
+  pendingComponent: SettingsPending,
+  errorComponent: SettingsLoadError,
   component: ResearchTokensPage,
 })
 

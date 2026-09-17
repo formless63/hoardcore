@@ -50,6 +50,20 @@
       "when": 1789593301829,
       "tag": "0006_lyrical_tyrannus",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789610342786,
+      "tag": "0007_overconfident_klaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789611073403,
+      "tag": "0008_perpetual_nebula",
+      "breakpoints": true
     }
   ]
 }

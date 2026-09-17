@@ -35,6 +35,9 @@ export async function getCollectionRunFromDatabase(runId: string) {
 
 export async function enqueueCatalogCollectionInDatabase(sourceId: string, requestLimit: number) {
   assertCatalogCollectionEnabled(getServerConfig().CATALOG_COLLECTION_ENABLED === 'true')
+  const [source] = await getDatabase().select({ collectionEnabled: catalogSources.collectionEnabled }).from(catalogSources).where(eq(catalogSources.id, sourceId))
+  if (!source) throw new Error('That catalog source is no longer available')
+  if (!source.collectionEnabled) throw new Error('Collection is paused for this source')
   let run: typeof collectionRuns.$inferSelect | undefined
   try {
     const insertedRuns = await getDatabase()

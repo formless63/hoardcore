@@ -60,13 +60,16 @@ describeWithDatabase('catalog snapshot persistence and listing history', () => {
   it('returns listing detail with newest observation first and run-level evidence', async () => {
     const item = record('detail', 31)
     item.listing.current.compareAtPrice = 44
+    item.listing.current.stockQuantity = 9
     await persistCatalogSnapshot(db(), sourceId!, [item], { runId, observedAt: new Date('2026-09-16T05:00:00Z'), evidence: { payload: { page: 1 }, contentType: 'application/json' } })
     await persistCatalogSnapshot(db(), sourceId!, [{ ...item, listing: { ...item.listing, current: { ...item.listing.current, price: 35 } } }], { runId, observedAt: new Date('2026-09-16T07:00:00Z') })
     const listing = await db().select().from(sourceListings).where(eq(sourceListings.listingKey, item.listing.listingKey))
     const detail = await getCatalogListingDetail(db(), listing[0]!.id)
     expect(detail?.current.price).toBe('35.00')
     expect(detail?.current.compareAtPrice).toBe('44.00')
+    expect(detail?.current.stockQuantity).toBe(9)
     expect(detail?.observations[0]?.compareAtPrice).toBe('44.00')
+    expect(detail?.observations[0]?.stockQuantity).toBe(9)
     expect(detail?.observations).toHaveLength(2)
     expect(detail?.observations[0]?.observedAt.toISOString()).toBe('2026-09-16T07:00:00.000Z')
     expect(detail?.observations[1]?.evidence?.run?.id).toBe(runId)

@@ -4,7 +4,7 @@ const optionalText = z.string().nullable()
 
 export const listingObservationSchema = z.object({
   id: z.string(), observedAt: z.date(), title: z.string(), price: optionalText, compareAtPrice: optionalText,
-  currency: optionalText, available: z.boolean(),
+  currency: optionalText, available: z.boolean(), stockQuantity: z.number().int().nullable(),
   evidence: z.object({
     id: z.string(), capturedAt: z.date(), contentType: optionalText,
     sha256: optionalText,
@@ -18,7 +18,7 @@ export const listingDetailSchema = z.object({
   source: z.object({ id: z.string(), displayName: z.string(), moduleId: z.string() }),
   product: z.object({ id: z.string(), title: z.string(), description: optionalText, brand: optionalText, productType: optionalText, tags: z.array(z.string()), imageUrls: z.array(z.string()) }),
   variant: z.object({ id: z.string(), title: optionalText, sku: optionalText, barcode: optionalText }),
-  current: z.object({ title: z.string(), price: optionalText, compareAtPrice: optionalText, currency: optionalText, available: z.boolean(), observedAt: z.date() }),
+  current: z.object({ title: z.string(), price: optionalText, compareAtPrice: optionalText, currency: optionalText, available: z.boolean(), stockQuantity: z.number().int().nullable(), observedAt: z.date() }),
   observations: z.array(listingObservationSchema),
 })
 

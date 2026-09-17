@@ -69,6 +69,7 @@ export const sourceListingCurrent = pgTable('source_listing_current', {
   compareAtPrice: numeric('compare_at_price', { precision: 14, scale: 2 }),
   currency: text('currency'),
   available: boolean('available').notNull(),
+  stockQuantity: integer('stock_quantity'),
   observedAt: timestamp('observed_at', { withTimezone: true }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })
@@ -82,6 +83,7 @@ export const sourceListingObservations = pgTable('source_listing_observations', 
   compareAtPrice: numeric('compare_at_price', { precision: 14, scale: 2 }),
   currency: text('currency'),
   available: boolean('available').notNull(),
+  stockQuantity: integer('stock_quantity'),
   evidenceId: uuid('evidence_id'),
 }, (table) => [
   index('source_listing_observations_history_idx').on(table.listingId, table.observedAt),

@@ -23,7 +23,7 @@ const labels: Record<CollectionRun['status'], string> = {
   queued: 'Queued', running: 'Running', succeeded: 'Succeeded', partial: 'Partial', not_modified: 'Not modified', failed: 'Failed',
 }
 
-export function SourceRunControl({ sourceId, run, defaultRequestLimit = 3 }: { sourceId: string; run?: CollectionRun; defaultRequestLimit?: number }) {
+export function SourceRunControl({ sourceId, run, defaultRequestLimit = 3, disabled = false }: { sourceId: string; run?: CollectionRun; defaultRequestLimit?: number; disabled?: boolean }) {
   const runCollection = useServerFn(enqueueCatalogCollection)
   const router = useRouter()
   const navigate = useNavigate()
@@ -58,8 +58,8 @@ export function SourceRunControl({ sourceId, run, defaultRequestLimit = 3 }: { s
     </label>
     <p className="max-w-60 text-right text-xs text-muted-foreground">Includes the access-policy check. Requests are spaced at least one second apart. Incomplete collections are saved as partial.</p>
     <div className="flex flex-wrap justify-end gap-2">
-      <Button disabled={busy || requestLimit < 2 || requestLimit > 20 || !Number.isInteger(requestLimit) || run?.status === 'queued' || run?.status === 'running'} size="small" variant="secondary" onClick={() => void start(false)}>{busy ? 'Starting…' : 'Run in background'}</Button>
-      <Button disabled={busy || requestLimit < 2 || requestLimit > 20 || !Number.isInteger(requestLimit) || run?.status === 'queued' || run?.status === 'running'} size="small" onClick={() => void start(true)}>Run &amp; watch</Button>
+      <Button disabled={disabled || busy || requestLimit < 2 || requestLimit > 20 || !Number.isInteger(requestLimit) || run?.status === 'queued' || run?.status === 'running'} size="small" variant="secondary" onClick={() => void start(false)}>{busy ? 'Starting…' : 'Run in background'}</Button>
+      <Button disabled={disabled || busy || requestLimit < 2 || requestLimit > 20 || !Number.isInteger(requestLimit) || run?.status === 'queued' || run?.status === 'running'} size="small" onClick={() => void start(true)}>Run &amp; watch</Button>
     </div>
     {(run?.status === 'failed' || run?.status === 'partial') && run.error ? <p className="max-w-xs text-right text-xs text-destructive" role="alert">{run.error}</p> : null}
     {error ? <p className="max-w-xs text-right text-xs text-destructive" role="alert">{error}</p> : null}

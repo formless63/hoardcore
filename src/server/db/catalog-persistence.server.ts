@@ -32,6 +32,7 @@ export async function listCurrentCatalogListings(db: Database) {
     compareAtPrice: sourceListingCurrent.compareAtPrice,
     currency: sourceListingCurrent.currency,
     available: sourceListingCurrent.available,
+    stockQuantity: sourceListingCurrent.stockQuantity,
     observedAt: sourceListingCurrent.observedAt,
   }).from(sourceListingCurrent)
     .innerJoin(sourceListings, eq(sourceListings.id, sourceListingCurrent.listingId))
@@ -93,16 +94,16 @@ export async function persistCatalogSnapshot(
       await tx.insert(sourceListingObservations).values({
         listingId: listing.id, observedAt, title: record.listing.current.title, price: record.listing.current.price?.toFixed(2),
         compareAtPrice: record.listing.current.compareAtPrice?.toFixed(2),
-        currency: record.listing.current.currency, available: record.listing.current.available, evidenceId,
+        currency: record.listing.current.currency, available: record.listing.current.available, stockQuantity: record.listing.current.stockQuantity, evidenceId,
       }).onConflictDoNothing({ target: [sourceListingObservations.listingId, sourceListingObservations.evidenceId] })
       await tx.insert(sourceListingCurrent).values({
         listingId: listing.id, observedAt, title: record.listing.current.title, price: record.listing.current.price?.toFixed(2),
         compareAtPrice: record.listing.current.compareAtPrice?.toFixed(2),
-        currency: record.listing.current.currency, available: record.listing.current.available, updatedAt: observedAt,
+        currency: record.listing.current.currency, available: record.listing.current.available, stockQuantity: record.listing.current.stockQuantity, updatedAt: observedAt,
       }).onConflictDoUpdate({ target: sourceListingCurrent.listingId, set: {
         observedAt, title: record.listing.current.title, price: record.listing.current.price?.toFixed(2),
         compareAtPrice: record.listing.current.compareAtPrice?.toFixed(2),
-        currency: record.listing.current.currency, available: record.listing.current.available, updatedAt: observedAt,
+        currency: record.listing.current.currency, available: record.listing.current.available, stockQuantity: record.listing.current.stockQuantity, updatedAt: observedAt,
       } })
       persisted.push({ productId: product.id, variantId: variant.id, listingId: listing.id })
     }

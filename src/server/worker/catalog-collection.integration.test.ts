@@ -59,4 +59,19 @@ describe.skipIf(!testDatabaseUrl)('catalog collection worker safety', () => {
     const [recorded] = await getDatabase().select().from(collectionRuns).where(eq(collectionRuns.id, run.id))
     expect(recorded).toMatchObject({ status: 'failed', requestCount: '0' })
   })
+
+  it('does not fetch a paused source even when a run was queued before it was paused', async () => {
+    const normalized = normalizeShopifyCatalogUrl(`https://fixture-${crypto.randomUUID()}.invalid/collections/sale`)
+    const [source] = await getDatabase().insert(catalogSources).values({
+      moduleId: 'shopify', displayName: 'Paused fixture', sourceKey: normalized.sourceKey, config: normalized.config,
+      collectionEnabled: false,
+    }).returning({ id: catalogSources.id })
+    sourceId = source.id
+    const [run] = await getDatabase().insert(collectionRuns).values({ sourceId, requestLimit: 2 }).returning({ id: collectionRuns.id })
+    const http = vi.fn()
+    await runCatalogCollection({ sourceId, runId: run.id }, { logger: { info: vi.fn() } }, { collectionEnabled: true, http })
+    expect(http).not.toHaveBeenCalled()
+    const [recorded] = await getDatabase().select().from(collectionRuns).where(eq(collectionRuns.id, run.id))
+    expect(recorded).toMatchObject({ status: 'failed', error: 'Collection is paused for this source' })
+  })
 })

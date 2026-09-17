@@ -1,4 +1,4 @@
-import { desc } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import { getSourceModule } from '~/modules/registry'
 import { getDatabase } from '~/server/db/index.server'
 import { catalogSources, type CatalogSource } from '~/server/db/schema'
@@ -6,6 +6,7 @@ import {
   catalogSourceSummarySchema,
   type CatalogSourceSummary,
   type CreateCatalogSourceInput,
+  type UpdateSourceScheduleInput,
 } from './sources.schemas'
 
 function isUniqueConstraintViolation(error: unknown): boolean {
@@ -38,6 +39,10 @@ function summarizeCatalogSource(source: CatalogSource): CatalogSourceSummary {
       moduleId: source.moduleId,
       moduleName: source.moduleId,
       status: source.status,
+      collectionEnabled: source.collectionEnabled,
+      scheduleHours: source.scheduleHours,
+      scheduleRequestLimit: source.scheduleRequestLimit,
+      nextRunAt: source.nextRunAt?.toISOString() ?? null,
       summary: 'Source module unavailable',
       createdAt: source.createdAt.toISOString(),
     })
@@ -51,9 +56,27 @@ function summarizeCatalogSource(source: CatalogSource): CatalogSourceSummary {
     moduleId: source.moduleId,
     moduleName: sourceModule.manifest.name,
     status: source.status,
+    collectionEnabled: source.collectionEnabled,
+    scheduleHours: source.scheduleHours,
+    scheduleRequestLimit: source.scheduleRequestLimit,
+    nextRunAt: source.nextRunAt?.toISOString() ?? null,
     summary: normalized.summary,
     createdAt: source.createdAt.toISOString(),
   })
+}
+
+export async function updateSourceScheduleInDatabase(input: UpdateSourceScheduleInput): Promise<CatalogSourceSummary> {
+  const [source] = await getDatabase().update(catalogSources).set({
+    collectionEnabled: input.collectionEnabled,
+    scheduleHours: input.scheduleHours,
+    scheduleRequestLimit: input.scheduleRequestLimit,
+    nextRunAt: input.collectionEnabled && input.scheduleHours
+      ? new Date(Date.now() + input.scheduleHours * 60 * 60 * 1000)
+      : null,
+    updatedAt: new Date(),
+  }).where(eq(catalogSources.id, input.sourceId)).returning()
+  if (!source) throw new Error('Catalog source not found')
+  return summarizeCatalogSource(source)
 }
 
 export async function listCatalogSourcesFromDatabase(): Promise<{

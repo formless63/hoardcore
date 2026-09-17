@@ -96,6 +96,16 @@ describe('Shopify source registration', () => {
     expect(record.variant.compareAtPrice).toBe(18)
     expect(record.listing.current.compareAtPrice).toBe(18)
     expect(record.listing.current.available).toBe(true)
+    expect(record.listing.current.stockQuantity).toBeUndefined()
+  })
+
+  it('preserves an explicit quantity when a Shopify response supplies one', () => {
+    const input = { ...validFixture, products: validFixture.products.map((product, index) => index === 0 ? { ...product, variants: product.variants.map((variant) => ({ ...variant, inventory_quantity: 245 })) } : product) }
+    const [record] = normalizeShopifyCollection(parseShopifyCollection(input), { sourceKey: 'catalog-a.example/collections/desk', baseUrl: 'https://catalog-a.example' })
+    expect(record.listing.current.stockQuantity).toBe(245)
+    const zeroInput = { ...validFixture, products: validFixture.products.map((product, index) => index === 0 ? { ...product, variants: product.variants.map((variant) => ({ ...variant, inventory_quantity: 0 })) } : product) }
+    const [outOfStock] = normalizeShopifyCollection(parseShopifyCollection(zeroInput), { sourceKey: 'catalog-a.example/collections/desk', baseUrl: 'https://catalog-a.example' })
+    expect(outOfStock.listing.current.stockQuantity).toBe(0)
   })
 
   it('normalizes blank and null optional metadata without rejecting a page', () => {

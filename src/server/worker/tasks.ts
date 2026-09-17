@@ -1,5 +1,5 @@
 import type { JobHelpers, Task, TaskList } from 'graphile-worker'
-import { and, desc, eq, inArray } from 'drizzle-orm'
+import { and, desc, eq, inArray, lte, isNotNull } from 'drizzle-orm'
 import { getDatabase } from '../db/index.server'
 import { catalogSources } from '../db/schema/catalog-sources'
 import { collectionRunEvents, collectionRuns } from '../db/schema/catalog'
@@ -19,6 +19,7 @@ import { COLLECTION_DISABLED_MESSAGE } from '~/features/sources/collection-gate'
 export interface HoardcoreTaskPayloads {
   'fixture.echo': { value: string }
   'catalog.collect': { sourceId: string; runId: string }
+  'catalog.schedule': Record<string, never>
   'media.capture': { runId: string; after?: string; auto?: boolean }
   'alerts.evaluate': AlertTaskPayload
   'alerts.deliver': AlertDeliveryTaskPayload
@@ -84,6 +85,10 @@ export async function runCatalogCollection(
   }
   const [source] = await db.select().from(catalogSources).where(eq(catalogSources.id, payload.sourceId))
   if (!source) throw new Error(`Catalog source ${payload.sourceId} was not found`)
+  if (!source.collectionEnabled) {
+    await db.update(collectionRuns).set({ status: 'failed', error: 'Collection is paused for this source', completedAt: new Date() }).where(eq(collectionRuns.id, payload.runId))
+    return
+  }
   const [priorRun] = await db.select().from(collectionRuns).where(and(inArray(collectionRuns.status, ['succeeded', 'not_modified']), eq(collectionRuns.sourceId, source.id))).orderBy(desc(collectionRuns.completedAt)).limit(1)
   const [runRecord] = await db.update(collectionRuns).set({ status: 'running', startedAt: new Date() }).where(eq(collectionRuns.id, payload.runId)).returning()
   if (!runRecord) throw new Error(`Collection run ${payload.runId} was not found`)
@@ -185,6 +190,44 @@ export async function runCatalogCollection(
 
 export const catalogCollectTask: Task<'catalog.collect'> = async (payload, helpers) => runCatalogCollection(payload, helpers)
 
+/** Per-source schedules are inert until explicitly enabled by an operator. */
+export const catalogScheduleTask: Task<'catalog.schedule'> = async (_payload, helpers) => {
+  if (getServerConfig().CATALOG_COLLECTION_ENABLED !== 'true') return
+  const db = getDatabase()
+  const now = new Date()
+  const due = await db.select().from(catalogSources).where(and(
+    eq(catalogSources.collectionEnabled, true),
+    isNotNull(catalogSources.scheduleHours),
+    lte(catalogSources.nextRunAt, now),
+  )).orderBy(catalogSources.nextRunAt).limit(20)
+  for (const source of due) {
+    if (!source.scheduleHours) continue
+    const nextRunAt = new Date(now.getTime() + source.scheduleHours * 60 * 60 * 1000)
+    try {
+      // Claim the due slot before enqueuing. A concurrent pause or schedule edit
+      // invalidates this exact timestamp and cannot trigger an unwanted run.
+      const claimed = await db.update(catalogSources).set({ nextRunAt, updatedAt: now }).where(and(
+        eq(catalogSources.id, source.id),
+        eq(catalogSources.collectionEnabled, true),
+        eq(catalogSources.nextRunAt, source.nextRunAt!),
+        eq(catalogSources.scheduleHours, source.scheduleHours),
+      )).returning({ id: catalogSources.id })
+      if (!claimed.length) continue
+      const [run] = await db.insert(collectionRuns).values({ sourceId: source.id, requestLimit: source.scheduleRequestLimit }).onConflictDoNothing().returning({ id: collectionRuns.id })
+      if (run) {
+        await db.insert(collectionRunEvents).values({ runId: run.id, message: `Scheduled collection queued with a ceiling of ${source.scheduleRequestLimit} requests.` })
+        try { await helpers.addJob('catalog.collect', { sourceId: source.id, runId: run.id }, { maxAttempts: 1 }) }
+        catch (error) {
+          await db.update(collectionRuns).set({ status: 'failed', error: `Schedule enqueue failed: ${String(error)}`, completedAt: new Date() }).where(eq(collectionRuns.id, run.id))
+          throw error
+        }
+      }
+    } catch (error) {
+      helpers.logger.error(`catalog.schedule: could not queue source ${source.id}: ${String(error)}`)
+    }
+  }
+}
+
 export const mediaCaptureTask: Task<'media.capture'> = async (payload, helpers) => {
   try {
     const db = getDatabase()
@@ -214,6 +257,7 @@ export const mediaCaptureTask: Task<'media.capture'> = async (payload, helpers) 
 export const taskRegistry = {
   'fixture.echo': fixtureEchoTask,
   'catalog.collect': catalogCollectTask,
+  'catalog.schedule': catalogScheduleTask,
   'media.capture': mediaCaptureTask,
   'alerts.evaluate': evaluateCollectionAlertsTask,
   'alerts.deliver': deliverAlertsTask,

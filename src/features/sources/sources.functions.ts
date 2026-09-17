@@ -3,9 +3,11 @@ import { setResponseHeader } from '@tanstack/react-start/server'
 import {
   createCatalogSourceInDatabase,
   listCatalogSourcesFromDatabase,
+  updateSourceScheduleInDatabase,
 } from './sources.server'
 import { createCatalogSourceInputSchema } from './sources.schemas'
 import { manualCollectionRequestLimitSchema } from './sources.schemas'
+import { updateSourceScheduleSchema } from './sources.schemas'
 import { withRequiredSession } from '~/server/auth.server'
 import { enqueueCatalogCollectionInDatabase, getCollectionRunFromDatabase, listCollectionRunsFromDatabase } from './runs.server'
 import { z } from 'zod'
@@ -25,6 +27,13 @@ export const createCatalogSource = createServerFn({ method: 'POST' })
       return createCatalogSourceInDatabase(data)
     })
   })
+
+export const updateSourceSchedule = createServerFn({ method: 'POST' })
+  .validator(updateSourceScheduleSchema)
+  .handler(async ({ data }) => withRequiredSession(async () => {
+    setResponseHeader('Cache-Control', 'private, no-store')
+    return updateSourceScheduleInDatabase(data)
+  }))
 
 export const listCollectionRuns = createServerFn({ method: 'GET' })
   .validator(z.object({ sourceId: z.uuid().optional() }))
