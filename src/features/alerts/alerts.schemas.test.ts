@@ -7,7 +7,7 @@ describe('ntfy notification configuration', () => {
   })
 
   it('does not permit the notification adapter to target local or private addresses', () => {
-    for (const endpoint of ['http://ntfy.example.test', 'https://localhost', 'https://127.0.0.1', 'https://10.0.0.8', 'https://100.64.0.1', 'https://169.254.169.254', 'https://192.168.1.8', 'https://ntfy.example.test/path']) {
+    for (const endpoint of ['http://ntfy.example.test', 'https://localhost', 'https://127.0.0.1', 'https://10.0.0.8', 'https://100.64.0.1', 'https://169.254.169.254', 'https://192.168.1.8', 'https://ntfy.example.test:8443', 'https://ntfy.example.test/path']) {
       expect(ntfyEndpointSchema.safeParse(endpoint).success).toBe(false)
     }
   })

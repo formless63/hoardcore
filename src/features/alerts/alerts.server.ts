@@ -9,6 +9,7 @@ import { listingFiltersSchema, matchesListingFilters } from '~/features/catalog/
 import { listCurrentCatalogListings } from '~/server/db/catalog-persistence.server'
 import { watchedListings } from '~/server/db/schema/watched-listings'
 import { ntfyEndpointSchema, type NotificationSettingsInput } from './alerts.schemas'
+import { secureNtfyFetch, type NtfyFetch } from './ntfy-transport.server'
 
 export type AlertEvent = {
   listing: CurrentListing
@@ -107,11 +108,8 @@ export async function queueAlertsForCollectionRun(db: Database, input: { runId: 
   return { events, queued }
 }
 
-export interface NtfyFetchResponse { ok: boolean; status: number; text(): Promise<string> }
-export type NtfyFetch = (input: string, init: RequestInit) => Promise<NtfyFetchResponse>
-
 /** Bounded retries use durable backoff; they never trigger another source collection. */
-export async function deliverQueuedNtfyNotifications(db: Database, fetcher: NtfyFetch = fetch, limit = 20) {
+export async function deliverQueuedNtfyNotifications(db: Database, fetcher: NtfyFetch = secureNtfyFetch, limit = 20) {
   const now = new Date()
   const rows = await db.select({ delivery: notificationDeliveries, settings: notificationSettings }).from(notificationDeliveries).innerJoin(notificationSettings, eq(notificationSettings.userId, notificationDeliveries.userId)).where(and(eq(notificationDeliveries.status, 'queued'), eq(notificationSettings.enabled, true), or(isNull(notificationDeliveries.nextAttemptAt), lte(notificationDeliveries.nextAttemptAt, now)))).orderBy(asc(notificationDeliveries.createdAt)).limit(limit)
   let sent = 0; let nextRetryAt: Date | undefined
