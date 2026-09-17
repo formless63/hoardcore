@@ -9,9 +9,9 @@ type SourceRow = {
   inStock: string
   outOfStock: string
   quantityKnown: string
-  lastObservedAt: Date | null
+  lastObservedAt: Date | string | null
   lastRunStatus: string | null
-  lastRunAt: Date | null
+  lastRunAt: Date | string | null
 }
 
 type ChangeRow = {
@@ -25,13 +25,18 @@ type ChangeRow = {
   previousQuantity: number | null
   available: boolean
   previousAvailable: boolean
-  observedAt: Date
+  observedAt: Date | string
   changeTotal: string
   outOfStockTotal: string
 }
 
-type NewRow = { id: string; title: string; sourceName: string; createdAt: Date }
+type NewRow = { id: string; title: string; sourceName: string; createdAt: Date | string }
 type ActivityRow = { day: string; runs: string; observations: string }
+
+/** Drizzle raw SQL may surface timestamptz as a Date or an ISO string. */
+export function overviewTimestamp(value: Date | string | null): string | null {
+  return value === null ? null : new Date(value).toISOString()
+}
 
 export async function getOverviewFromDatabase(days: 7 | 30) {
   const db = getDatabase()
@@ -115,9 +120,9 @@ export async function getOverviewFromDatabase(days: 7 | 30) {
     inStock: Number(row.inStock),
     outOfStock: Number(row.outOfStock),
     quantityKnown: Number(row.quantityKnown),
-    lastObservedAt: row.lastObservedAt?.toISOString() ?? null,
+    lastObservedAt: overviewTimestamp(row.lastObservedAt),
     lastRunStatus: row.lastRunStatus,
-    lastRunAt: row.lastRunAt?.toISOString() ?? null,
+    lastRunAt: overviewTimestamp(row.lastRunAt),
   }))
   const changes = changeResult.rows.map((row) => ({
     id: row.id,
@@ -130,7 +135,7 @@ export async function getOverviewFromDatabase(days: 7 | 30) {
     previousQuantity: row.previousQuantity,
     available: row.available,
     previousAvailable: row.previousAvailable,
-    observedAt: row.observedAt.toISOString(),
+    observedAt: overviewTimestamp(row.observedAt)!,
   }))
   return {
     days,
@@ -145,7 +150,7 @@ export async function getOverviewFromDatabase(days: 7 | 30) {
     changeTotal: Number(changeResult.rows[0]?.changeTotal ?? 0),
     newlyOutOfStockTotal: Number(changeResult.rows[0]?.outOfStockTotal ?? 0),
     newlyOutOfStock: changes.filter((change) => change.previousAvailable && !change.available).slice(0, 8),
-    recentlyAdded: newResult.rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() })),
+    recentlyAdded: newResult.rows.map((row) => ({ ...row, createdAt: overviewTimestamp(row.createdAt)! })),
     activity: activityResult.rows.map((row) => ({ day: row.day, runs: Number(row.runs), observations: Number(row.observations) })),
   }
 }
