@@ -28,5 +28,16 @@ describe('saved listing filter contract', () => {
   it('rejects inverted ranges and future schema versions', () => {
     expect(listingFiltersSchema.safeParse({ ...emptyListingFilters, minPrice: 100, maxPrice: 20 }).success).toBe(false)
     expect(listingFiltersSchema.safeParse({ ...emptyListingFilters, version: 2 }).success).toBe(false)
+    expect(listingFiltersSchema.safeParse({ ...emptyListingFilters, categoryGroup: 'not-a-group' }).success).toBe(false)
+  })
+
+  it('supports grouped filters and legacy saved views without a group', () => {
+    const panel = { ...listing, category: 'Load Centers - Copper Bus' }
+    expect(matchesListingFilters(panel, { ...emptyListingFilters, categoryGroup: 'distribution' })).toBe(true)
+    expect(matchesListingFilters(panel, { ...emptyListingFilters, categoryGroup: 'lighting' })).toBe(false)
+    expect(matchesListingFilters(panel, { ...emptyListingFilters, categoryGroup: 'distribution', category: 'Panelboards & Accessories' })).toBe(false)
+    expect(matchesListingFilters({ ...listing, category: 'Steel' }, { ...emptyListingFilters, categoryGroup: 'unmapped' })).toBe(true)
+    const { categoryGroup: _omitted, ...previousVersionView } = emptyListingFilters
+    expect(listingFiltersSchema.parse(previousVersionView).categoryGroup).toBe('')
   })
 })

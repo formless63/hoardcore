@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { CurrentListing } from './catalog.schemas'
+import { categoryGroupFor, categoryGroups, unmappedCategoryGroup } from './category-groups'
 
 const amount = z.number().finite().nonnegative().max(1_000_000_000).nullable()
 const percent = z.number().finite().min(0).max(100).nullable()
@@ -8,6 +9,7 @@ const percent = z.number().finite().min(0).max(100).nullable()
 export const listingFiltersSchema = z.object({
   version: z.literal(1),
   query: z.string().trim().max(200),
+  categoryGroup: z.string().max(80).refine((value) => value === '' || value === unmappedCategoryGroup.id || categoryGroups.some((group) => group.id === value), 'Unknown category group').default(''),
   category: z.string().max(200),
   manufacturer: z.string().max(200),
   sourceId: z.string().max(100),
@@ -30,7 +32,7 @@ export const listingFiltersSchema = z.object({
 
 export type ListingFilters = z.output<typeof listingFiltersSchema>
 export const emptyListingFilters: ListingFilters = {
-  version: 1, query: '', category: '', manufacturer: '', sourceId: '', stock: 'all',
+  version: 1, query: '', categoryGroup: '', category: '', manufacturer: '', sourceId: '', stock: 'all',
   minPrice: null, maxPrice: null, minDiscountAmount: null, maxDiscountAmount: null,
   minDiscountPercent: null, maxDiscountPercent: null,
 }
@@ -45,6 +47,7 @@ export function listingDiscount(listing: Pick<CurrentListing, 'price' | 'compare
 export function matchesListingFilters(listing: CurrentListing, filters: ListingFilters): boolean {
   const needle = filters.query.toLowerCase()
   if (needle && ![listing.productTitle, listing.variantTitle, listing.manufacturer, listing.category, listing.sourceName, listing.moduleId, listing.sku, ...listing.tags].some((value) => value?.toLowerCase().includes(needle))) return false
+  if (filters.categoryGroup && categoryGroupFor(listing.category) !== filters.categoryGroup) return false
   if (filters.category && listing.category !== filters.category) return false
   if (filters.manufacturer && listing.manufacturer !== filters.manufacturer) return false
   if (filters.sourceId && listing.sourceId !== filters.sourceId) return false
