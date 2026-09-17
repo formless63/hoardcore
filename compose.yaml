@@ -2,6 +2,8 @@ services:
   app:
     build: .
     restart: unless-stopped
+    # Let the embedded worker finish a paced batch before replacing the app.
+    stop_grace_period: 90s
     env_file:
       - path: .env
         required: false

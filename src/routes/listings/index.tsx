@@ -5,6 +5,7 @@ import { getPublicSession } from '~/features/auth/auth.functions'
 import { listSavedListingViews } from '~/features/catalog/saved-views.functions'
 import { listWatchedListingIds } from '~/features/watchlist/watchlist.functions'
 import { listResearchSummariesForListings } from '~/features/research/research.functions'
+import { ListingLoadError, ListingsPending } from '~/features/catalog/listing-load-state'
 
 export const Route = createFileRoute('/listings/')({
   beforeLoad: async () => { if (!(await getPublicSession())) throw redirect({ to: '/login' }) },
@@ -14,6 +15,10 @@ export const Route = createFileRoute('/listings/')({
     return { listings, savedViews, watchedListingIds, researchSummaries }
   },
   head: () => ({ meta: [{ title: 'Listings · Hoardcore' }] }),
+  pendingMs: 100,
+  pendingMinMs: 200,
+  pendingComponent: ListingsPending,
+  errorComponent: ListingLoadError,
   component: ListingsPage,
 })
 

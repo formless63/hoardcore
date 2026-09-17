@@ -6,7 +6,7 @@ export const listingObservationSchema = z.object({
   id: z.string(), observedAt: z.date(), title: z.string(), price: optionalText, compareAtPrice: optionalText,
   currency: optionalText, available: z.boolean(),
   evidence: z.object({
-    id: z.string(), capturedAt: z.date(), payload: z.string(), contentType: optionalText,
+    id: z.string(), capturedAt: z.date(), contentType: optionalText,
     sha256: optionalText,
     run: z.object({ id: z.string(), status: z.string(), requestCount: z.string(), error: optionalText, createdAt: z.date(), startedAt: z.date().nullable(), completedAt: z.date().nullable() }).nullable(),
   }).nullable(),

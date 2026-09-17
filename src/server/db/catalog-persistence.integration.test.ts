@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { eq, inArray, like } from 'drizzle-orm'
 import type { NormalizedCatalogRecord } from '~/modules/types'
-import { getCatalogListingDetail } from './catalog-detail.server'
+import { getCatalogListingDetail, getCatalogListingEvidencePayload } from './catalog-detail.server'
 import { persistCatalogSnapshot } from './catalog-persistence.server'
 import { closeDatabase, getDatabase } from './index.server'
 import { catalogProducts, catalogSources, collectionRuns, sourceEvidence, sourceListingObservations, sourceListings } from './schema'
@@ -70,7 +70,8 @@ describeWithDatabase('catalog snapshot persistence and listing history', () => {
     expect(detail?.observations).toHaveLength(2)
     expect(detail?.observations[0]?.observedAt.toISOString()).toBe('2026-09-16T07:00:00.000Z')
     expect(detail?.observations[1]?.evidence?.run?.id).toBe(runId)
-    expect(detail?.observations[1]?.evidence?.payload).toContain('page')
+    expect(detail?.observations[1]?.evidence).not.toHaveProperty('payload')
+    expect(await getCatalogListingEvidencePayload(db(), listing[0]!.id, detail!.observations[1]!.evidence!.id)).toContain('"page": 1')
   })
 
   it('is idempotent when a durable collection run is retried', async () => {
