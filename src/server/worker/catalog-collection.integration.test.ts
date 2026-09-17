@@ -75,6 +75,24 @@ describe.skipIf(!testDatabaseUrl)('catalog collection worker safety', () => {
     expect(recorded).toMatchObject({ status: 'failed', error: 'Collection is paused for this source' })
   })
 
+  it('does not revive a recovered terminal run or contact its source', async () => {
+    const normalized = normalizeShopifyCatalogUrl(`https://fixture-${crypto.randomUUID()}.invalid/collections/sale`)
+    const [source] = await getDatabase().insert(catalogSources).values({
+      moduleId: 'shopify', displayName: 'Recovered fixture', sourceKey: normalized.sourceKey, config: normalized.config,
+    }).returning({ id: catalogSources.id })
+    sourceId = source.id
+    const [run] = await getDatabase().insert(collectionRuns).values({ sourceId, status: 'failed', requestLimit: 2, error: 'Interrupted' }).returning({ id: collectionRuns.id })
+    const http = vi.fn()
+    await runCatalogCollection(
+      { sourceId, runId: run.id },
+      { logger: { info: vi.fn() } },
+      { collectionEnabled: true, accessPolicy: async () => true, http },
+    )
+    expect(http).not.toHaveBeenCalled()
+    const [recorded] = await getDatabase().select().from(collectionRuns).where(eq(collectionRuns.id, run.id))
+    expect(recorded).toMatchObject({ status: 'failed', error: 'Interrupted' })
+  })
+
   it('records invalid persisted Shopify configuration as failed instead of leaving a run active', async () => {
     const [source] = await getDatabase().insert(catalogSources).values({
       moduleId: 'shopify', displayName: 'Invalid config fixture', sourceKey: `invalid-${crypto.randomUUID()}`,

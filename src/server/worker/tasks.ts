@@ -95,8 +95,14 @@ export async function runCatalogCollection(
     return
   }
   const [priorRun] = await db.select().from(collectionRuns).where(and(inArray(collectionRuns.status, ['succeeded', 'not_modified']), eq(collectionRuns.sourceId, source.id))).orderBy(desc(collectionRuns.completedAt)).limit(1)
-  const [runRecord] = await db.update(collectionRuns).set({ status: 'running', startedAt: new Date() }).where(eq(collectionRuns.id, payload.runId)).returning()
-  if (!runRecord) throw new Error(`Collection run ${payload.runId} was not found`)
+  // A locked job from before a restart may wake after startup recovery has
+  // marked its run terminal. Never revive it or issue another source request.
+  const [runRecord] = await db.update(collectionRuns).set({ status: 'running', startedAt: new Date() })
+    .where(and(eq(collectionRuns.id, payload.runId), eq(collectionRuns.status, 'queued'))).returning()
+  if (!runRecord) {
+    helpers.logger.info(`catalog.collect: ${payload.runId} skipped because its run is no longer queued`)
+    return
+  }
   const run = dependencies.run ?? createShopifyCollectionRun(runRecord.requestLimit)
   async function log(message: string, requestCount = run.requests) {
     await db.insert(collectionRunEvents).values({ runId: payload.runId, message })

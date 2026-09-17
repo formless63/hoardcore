@@ -5,6 +5,7 @@ import { catalogSources } from './schema/catalog-sources'
 
 /** One row per selected listing; never loads large evidence payloads or full history. */
 export async function loadResearchExportRows(db: Database, listingIds: string[]) {
+  if (new Set(listingIds).size !== listingIds.length) throw new Error('Select each listing only once')
   const [rows, latestObservations] = await Promise.all([
     db.select({ listing: sourceListings, current: sourceListingCurrent, product: catalogProducts, variant: catalogVariants, source: catalogSources })
       .from(sourceListings)

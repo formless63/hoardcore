@@ -80,6 +80,7 @@ describeWithDatabase('catalog snapshot persistence and listing history', () => {
     expect(researchRows).toHaveLength(1)
     expect(researchRows[0]?.evidenceId).toBeNull() // latest observation had no evidence
     expect(researchRows[0]).not.toHaveProperty('evidence')
+    await expect(loadResearchExportRows(db(), [listing[0]!.id, listing[0]!.id])).rejects.toThrow('only once')
   })
 
   it('is idempotent when a durable collection run is retried', async () => {
