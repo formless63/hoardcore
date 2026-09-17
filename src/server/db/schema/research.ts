@@ -13,7 +13,10 @@ export const researchBatches = pgTable('research_batches', {
   packet: jsonb('packet').$type<unknown>().notNull(),
   prompt: text('prompt').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-}, (table) => [index('research_batches_user_created_idx').on(table.createdByUserId, table.createdAt)])
+}, (table) => [
+  index('research_batches_user_created_idx').on(table.createdByUserId, table.createdAt),
+  index('research_batches_packet_gin_idx').using('gin', table.packet),
+])
 
 /** An append-only raw submission plus its validated result envelope. */
 export const researchSubmissions = pgTable('research_submissions', {

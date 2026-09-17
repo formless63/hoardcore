@@ -1,6 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
-import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import type { Database } from '~/server/db/db.server'
 import { catalogProducts, catalogVariants, sourceListings } from '~/server/db/schema/catalog'
 import { researchApiTokens, researchBatches, researchComparables, researchSubmissions } from '~/server/db/schema/research'
@@ -154,18 +154,19 @@ export async function importResearchResult(db: Database, userId: string, input: 
 }
 
 export async function listResearchHistory(db: Database, userId: string, sourceListingId: string) {
-  const rows = await db.select({ id: researchSubmissions.id, status: researchSubmissions.status, resultId: researchSubmissions.resultId, completedAt: researchSubmissions.completedAt, createdAt: researchSubmissions.createdAt, rawPayload: researchSubmissions.rawPayload, normalizedPayload: researchSubmissions.normalizedPayload, packet: researchBatches.packet })
+  // Query the packet envelope before loading raw payloads. A user may have
+  // thousands of unrelated submissions, including notes-only records.
+  const listingEnvelope = JSON.stringify({ records: [{ listing: { hoardcoreId: sourceListingId } }] })
+  const listingReference = JSON.stringify({ records: [{ reference: { entityType: 'source_listing', hoardcoreId: sourceListingId } }] })
+  return db.select({ id: researchSubmissions.id, status: researchSubmissions.status, resultId: researchSubmissions.resultId, completedAt: researchSubmissions.completedAt, createdAt: researchSubmissions.createdAt, rawPayload: researchSubmissions.rawPayload, normalizedPayload: researchSubmissions.normalizedPayload })
     .from(researchSubmissions)
     .innerJoin(researchBatches, eq(researchBatches.id, researchSubmissions.batchId))
-    .where(eq(researchBatches.createdByUserId, userId))
+    .where(and(eq(researchBatches.createdByUserId, userId), or(
+      sql`${researchBatches.packet} @> ${listingEnvelope}::jsonb`,
+      sql`${researchBatches.packet} @> ${listingReference}::jsonb`,
+    )))
     .orderBy(desc(researchSubmissions.createdAt))
-  // Notes and claims do not necessarily have a comparable row. Packets retain
-  // immutable listing references, so use that durable envelope for history
-  // selection instead of making a price/evidence row mandatory.
-  return rows.filter((row) => {
-    const packet = parseResearchPacket(row.packet)
-    return packet.records.some((record) => record.listing?.hoardcoreId === sourceListingId || (record.reference.entityType === 'source_listing' && record.reference.hoardcoreId === sourceListingId))
-  }).map(({ packet: _packet, ...row }) => row)
+    .limit(50)
 }
 
 export async function listResearchComparables(db: Database, userId: string, sourceListingId: string) {
@@ -180,6 +181,7 @@ export async function listResearchComparables(db: Database, userId: string, sour
     .innerJoin(researchBatches, eq(researchBatches.id, researchSubmissions.batchId))
     .where(and(eq(researchBatches.createdByUserId, userId), eq(researchComparables.sourceListingId, sourceListingId)))
     .orderBy(desc(researchComparables.createdAt))
+    .limit(200)
 }
 
 export type ResearchComparableSummaryType = 'active_asking' | 'completed_sale' | 'retail_offer'

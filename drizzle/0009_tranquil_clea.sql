@@ -1,0 +1,1 @@
+CREATE INDEX "research_batches_packet_gin_idx" ON "research_batches" USING gin ("packet");

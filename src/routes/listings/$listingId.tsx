@@ -12,6 +12,7 @@ import { ResearchHistoryPanel } from '~/features/research/research-history-panel
 import { listWatchedListingIds } from '~/features/watchlist/watchlist.functions'
 import { WatchButton } from '~/features/watchlist/watch-button'
 import { stockLabel } from '~/features/catalog/stock-label'
+import { ListingTrends } from '~/features/catalog/listing-trend-panel'
 
 export const Route = createFileRoute('/listings/$listingId')({
   beforeLoad: async () => { if (!(await getPublicSession())) throw redirect({ to: '/login' }) },
@@ -87,6 +88,7 @@ function ListingDetailPage() {
       </div>
     </div>
     {detail.product.description ? <p className="mt-4 border-t border-border pt-3 text-xs leading-5 text-muted-foreground">{detail.product.description}</p> : null}
+    <ListingTrends detail={detail} />
     <Await promise={supplement} fallback={<div aria-label="Loading research" className="mt-4 space-y-2"><div className="h-12 animate-pulse rounded bg-muted motion-reduce:animate-none" /><div className="h-12 animate-pulse rounded bg-muted motion-reduce:animate-none" /></div>}>{({ comparables, history }) => <><ResearchComparableSummary comparables={comparables} /><ResearchHistoryPanel history={history} /></>}</Await>
     <section className="mt-5" aria-label="Listing observations and evidence"><h2 className="text-sm font-medium text-foreground">Observation history ({detail.observations.length})</h2>{detail.observations.length ? <div className="mt-2">{detail.observations.map((observation) => <Observation key={observation.id} listingId={detail.id} observation={observation} />)}</div> : <p className="mt-2 text-xs text-muted-foreground">No observations recorded yet.</p>}</section>
   </main>
