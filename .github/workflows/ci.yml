@@ -34,7 +34,10 @@ jobs:
         with:
           runtime: node@24
           cache: true
-          require-lockfile: true
+          install: false
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Validate and apply migrations
         env:
@@ -81,7 +84,10 @@ jobs:
         with:
           runtime: node@24
           cache: true
-          require-lockfile: true
+          install: false
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Apply migrations
         run: pnpm db:migrate
