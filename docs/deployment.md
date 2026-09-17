@@ -155,7 +155,10 @@ Notifications are off by default. Each user must configure a public HTTPS ntfy o
 enable notifications globally, then opt in individual watched listings or saved filter views and
 their event types. The app does not contact ntfy until these settings are enabled. Use a private,
 unguessable topic or a protected ntfy deployment; do not treat the topic name alone as an access
-control mechanism.
+control mechanism. For a protected server, set `NTFY_AUTH_ORIGIN` to its exact public HTTPS origin
+and `NTFY_ACCESS_TOKEN` to a publish-capable bearer token in the app container's private `.env`.
+Set both variables together on each deployment. The token is never exposed in the settings UI or
+sent to a different endpoint. Restart the app after changing these variables.
 
 ## Collection safety
 

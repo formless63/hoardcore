@@ -11,6 +11,7 @@ import { resolvedCategoryGroup } from '~/features/catalog/category-overrides.ser
 import { watchedListings } from '~/server/db/schema/watched-listings'
 import { ntfyEndpointSchema, type NotificationSettingsInput } from './alerts.schemas'
 import { secureNtfyFetch, type NtfyFetch } from './ntfy-transport.server'
+import { ntfyAuthorizationForEndpoint } from './ntfy-auth.server'
 
 export type AlertEvent = {
   listing: CurrentListing
@@ -224,7 +225,8 @@ export async function deliverQueuedNtfyNotifications(db: Database, fetcher: Ntfy
     try {
       const endpoint = ntfyEndpointSchema.parse(settings.endpoint)
       if (!settings.topic) throw new Error('Notifications are enabled without an ntfy topic')
-      const response = await fetcher(`${endpoint}/${encodeURIComponent(settings.topic)}`, { method: 'POST', redirect: 'manual', headers: { 'content-type': 'text/plain; charset=utf-8', title: delivery.payload.title, tags: delivery.payload.tags?.join(',') ?? '' }, body: delivery.payload.body, signal: AbortSignal.timeout(10_000) })
+      const authorization = ntfyAuthorizationForEndpoint(endpoint)
+      const response = await fetcher(`${endpoint}/${encodeURIComponent(settings.topic)}`, { method: 'POST', redirect: 'manual', headers: { 'content-type': 'text/plain; charset=utf-8', title: delivery.payload.title, tags: delivery.payload.tags?.join(',') ?? '', ...(authorization ? { authorization } : {}) }, body: delivery.payload.body, signal: AbortSignal.timeout(10_000) })
       if (!response.ok) throw new Error(`ntfy responded with HTTP ${response.status}`)
       await db.update(notificationDeliveries).set({ status: 'sent', attemptedAt, sentAt: new Date(), error: null, attemptCount: delivery.attemptCount + 1, nextAttemptAt: null }).where(eq(notificationDeliveries.id, delivery.id)); sent += 1
     } catch (error) {

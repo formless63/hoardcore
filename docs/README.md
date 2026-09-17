@@ -7,6 +7,8 @@ The site is deliberately static and build-tool-free so it can be published direc
 The front page focuses on what Hoardcore does today, why someone would self-host it, and links into practical installation guidance. Keep claims tied to implemented functionality.
 
 The application deployment guide is available at [deployment.md](deployment.md).
+The implemented HTTP endpoint reference is at [api.html](api.html), with its
+machine-readable OpenAPI 3.1 specification at [openapi.yaml](openapi.yaml).
 The release policy and first-release gate are in [releases.md](releases.md).
 
 ## Cloudflare Pages

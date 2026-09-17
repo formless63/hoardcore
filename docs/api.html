@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#07111c" />
+    <title>API reference — Hoardcore</title>
+    <meta name="description" content="Hoardcore's current HTTP endpoints and research interchange contract for external agents." />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="stylesheet" href="/site.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header"><div class="wrap header-inner">
+      <a class="brand" href="/" aria-label="Hoardcore home"><span class="brand-notch" aria-hidden="true"></span><span>HOARD<span>CORE</span></span></a>
+      <nav class="api-nav" aria-label="Primary navigation"><a href="/">Home</a><a href="/api.html" aria-current="page">API</a><a href="https://github.com/formless63/hoardcore/blob/main/docs/deployment.md">Deploy</a><a class="nav-github" href="https://github.com/formless63/hoardcore">GitHub ↗</a></nav>
+    </div></header>
+    <main class="wrap api-page" id="main">
+      <p class="eyebrow">Current HTTP surface</p>
+      <h1>API reference</h1>
+      <p class="api-lede">Hoardcore has one public, agent-facing write endpoint today. The rest of the application uses authenticated TanStack Start server functions, which are not a stable external API. This page describes what is implemented, not a proposed API.</p>
+      <p class="api-spec-link"><a class="button secondary" href="/openapi.yaml" type="application/yaml">View OpenAPI 3.1 specification →</a><span>The spec describes an operator-hosted app API; hoardcore.com hosts documentation only.</span></p>
+
+      <nav class="api-toc" aria-label="On this page"><a href="#research">Research import</a><a href="#contract">Result contract</a><a href="#other">Other endpoints</a><a href="#limits">Boundaries</a></nav>
+
+      <section class="api-section" id="research">
+        <p class="eyebrow">Agent endpoint</p><h2><code>POST /api/research/import</code></h2>
+        <p>Submit a versioned <code>ResearchResult</code> for a research packet that the same user already created in the app. Create a revocable token under <strong>Settings → Research API tokens</strong>; copy it when issued, since the value is not shown again. The token has the <code>research:write</code> scope and belongs to its creating user.</p>
+        <div class="api-facts"><div><span>Authentication</span><strong>Bearer research token</strong></div><div><span>Content type</span><strong>application/json</strong></div><div><span>Maximum body</span><strong>5,000,000 bytes</strong></div><div><span>Success</span><strong>201 Created</strong></div></div>
+        <pre><code>curl -X POST 'https://YOUR-APP.example/api/research/import' \
+  -H 'Authorization: Bearer YOUR_RESEARCH_TOKEN' \
+  -H 'Content-Type: application/json' \
+  --data-binary @research-result.json</code></pre>
+        <p>The JSON file must wrap the result as <code>{ "result": { ...ResearchResult } }</code>. A valid response contains <code>id</code>, <code>status</code>, and <code>comparableCount</code>; an identical repeated submission may also return <code>idempotent: true</code>. Missing, revoked, expired, or insufficient tokens receive <code>401</code>. Oversize bodies receive <code>413</code>; malformed or non-importable results receive <code>400</code>.</p>
+      </section>
+
+      <section class="api-section" id="contract">
+        <p class="eyebrow">Versioned interchange</p><h2>ResearchResult 1.0</h2>
+        <p>Export a packet from selected listings in Hoardcore first. Keep its <code>packetId</code>, all version fields, and immutable record references exactly as issued. A result must belong to a packet owned by the token's user. Research data may be valid or partial; invalid results are not imported.</p>
+        <pre><code>{
+  "result": {
+    "resultVersion": "1.0",
+    "packetVersion": "1.0",
+    "promptVersion": "1.0",
+    "schemaVersion": "1.0",
+    "packetId": "PACKET_ID_FROM_EXPORT",
+    "resultId": "YOUR_STABLE_RESULT_ID",
+    "completedAt": "2026-01-01T12:00:00Z",
+    "records": [{
+      "reference": { "entityType": "source_listing", "hoardcoreId": "REFERENCE_FROM_PACKET" },
+      "status": "valid",
+      "claims": [], "marketEstimates": [], "comparables": [],
+      "risks": [], "citations": [], "diagnostics": []
+    }]
+  }
+}</code></pre>
+        <p>For comparable prices, use <code>comparables</code> with a stable <code>comparableId</code>, <code>channel</code>, <code>evidenceType</code> (<code>active_asking</code>, <code>completed_sale</code>, or <code>retail_offer</code>), nonnegative numeric <code>price</code>, and three-letter <code>currency</code>. Optional evidence includes shipping, condition, observed/sold timestamps, sample size/window, URL, citation ID, and notes. Prices accept at most two decimal places. The <a href="https://github.com/formless63/hoardcore/blob/main/src/features/research/research.schemas.ts">versioned Zod schema</a> is the authoritative field-level contract.</p>
+      </section>
+
+      <section class="api-section" id="other">
+        <p class="eyebrow">Operational routes</p><h2>Other endpoints</h2>
+        <div class="api-route"><code>GET /api/health</code><p>Public liveness check. Returns <code>{ "status": "ok" }</code> when the process responds; it does not check database or worker readiness.</p></div>
+        <div class="api-route"><code>GET /api/ready</code><p>Public readiness check. Returns <code>200</code> with <code>status: "ready"</code> when PostgreSQL and the embedded worker are ready, otherwise <code>503</code>.</p></div>
+        <div class="api-route"><code>GET /api/media/{captureId}/{variant}</code><p>Requires an app session. <code>captureId</code> is a UUID; <code>variant</code> is <code>thumbnail</code> or <code>preview</code>. Returns the captured image or <code>404</code>.</p></div>
+        <div class="api-route"><code>/api/auth/*</code><p>Authentication routes handled by Better Auth. These are provider/session plumbing, not a Hoardcore agent API; use the configured login flow rather than scripting them.</p></div>
+      </section>
+
+      <section class="api-section" id="limits"><p class="eyebrow">Important boundary</p><h2>What is not exposed</h2><p>There is no stable public API yet for listing search, source management, collection runs, packet creation, watchlists, or alert settings. Use the authenticated app UI for those workflows. A research token cannot access media or general app data, and an ntfy publish token is a separate deployment secret—not a Hoardcore research token.</p></section>
+    </main>
+    <footer><div class="wrap footer-inner"><a class="brand" href="/"><span class="brand-notch" aria-hidden="true"></span><span>HOARD<span>CORE</span></span></a><p>Inventory acquisition, with a memory.</p><span>MIT licensed · Self-hosted</span></div></footer>
+  </body>
+</html>

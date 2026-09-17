@@ -41,6 +41,9 @@ Operator acceptance of each deployment remains important.
 - Per-user watched listings and opt-in ntfy alerts for watched items or saved filter views.
 - Liveness and database-readiness endpoints at `/api/health` and `/api/ready`.
 
+The [public API reference](https://hoardcore.com/api.html) includes the
+[OpenAPI 3.1 specification](https://hoardcore.com/openapi.yaml) for implemented HTTP routes.
+
 ## Source modules
 
 - **Shopify** — the first source module, collecting and normalizing public product/catalog data.

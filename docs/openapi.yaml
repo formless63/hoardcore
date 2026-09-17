@@ -1,0 +1,238 @@
+openapi: 3.1.0
+info:
+  title: Hoardcore HTTP API
+  version: 0.0.0
+  description: >-
+    Implemented HTTP routes. The research import endpoint is the only stable
+    external-agent endpoint; app-internal TanStack Start server functions are
+    not part of this API.
+servers:
+  - url: https://your-hoardcore.example
+    description: Replace with your own Hoardcore app origin; the public docs site does not host the app API.
+tags:
+  - name: Research
+  - name: Operations
+  - name: Media
+paths:
+  /api/research/import:
+    post:
+      tags: [Research]
+      summary: Import a result for an existing research packet
+      description: >-
+        The packet must already exist under the token owner's account. The
+        result must use the packet's exact ID, versions, and record references.
+        An identical repeat of a result ID is idempotent; a changed payload
+        under that ID is rejected.
+      operationId: importResearchResult
+      security:
+        - researchToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [result]
+              properties:
+                result:
+                  $ref: '#/components/schemas/ResearchResult'
+      responses:
+        '201':
+          description: Result imported or identical result previously imported.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, status, comparableCount]
+                properties:
+                  id: { type: string, format: uuid }
+                  status: { type: string, enum: [valid, partial] }
+                  comparableCount: { type: integer, minimum: 0 }
+                  idempotent: { type: boolean, description: Present on an identical retry. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+  /api/health:
+    get:
+      tags: [Operations]
+      summary: Process liveness
+      operationId: getHealth
+      responses:
+        '200':
+          description: The process is responding; this does not check database or worker readiness.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { const: ok }
+  /api/ready:
+    get:
+      tags: [Operations]
+      summary: Database and embedded worker readiness
+      operationId: getReadiness
+      responses:
+        '200':
+          description: PostgreSQL and the embedded worker are ready.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, worker]
+                properties:
+                  status: { const: ready }
+                  worker: { type: string }
+        '503':
+          description: Database or worker is unavailable.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { const: unavailable }
+                  worker: { type: string }
+  /api/media/{captureId}/{variant}:
+    get:
+      tags: [Media]
+      summary: Read a captured image derivative
+      description: Requires an authenticated Hoardcore browser session; research tokens do not grant media access.
+      operationId: getMediaVariant
+      parameters:
+        - name: captureId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: variant
+          in: path
+          required: true
+          schema: { type: string, enum: [thumbnail, preview] }
+      responses:
+        '200':
+          description: Captured image bytes.
+          content:
+            image/webp:
+              schema: { type: string, format: binary }
+        '404':
+          description: Invalid capture or variant, or no matching derivative.
+components:
+  securitySchemes:
+    researchToken:
+      type: http
+      scheme: bearer
+      description: Revocable research:write token issued under Settings → Research API tokens.
+  responses:
+    BadRequest:
+      description: Malformed or non-importable research result.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    Unauthorized:
+      description: Missing, invalid, expired, revoked, or insufficient research token.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    TooLarge:
+      description: Request body exceeds 5,000,000 bytes.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+  schemas:
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+    ResearchReference:
+      type: object
+      required: [entityType, hoardcoreId]
+      properties:
+        entityType: { type: string, enum: [product, variant, source_listing] }
+        hoardcoreId: { type: string, minLength: 1 }
+    Citation:
+      type: object
+      required: [citationId, url]
+      properties:
+        citationId: { type: string, minLength: 1 }
+        title: { type: string, minLength: 1 }
+        url: { type: string, format: uri }
+        retrievedAt: { type: string, format: date-time }
+        excerpt: { type: string, minLength: 1 }
+    Claim:
+      type: object
+      required: [field, value]
+      properties:
+        field: { type: string, minLength: 1 }
+        value: {}
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        citationIds: { type: array, items: { type: string, minLength: 1 }, default: [] }
+    MarketEstimate:
+      type: object
+      required: [estimateType]
+      properties:
+        estimateType: { type: string, enum: [market_value, sale_price, demand, liquidity] }
+        amount: { type: number, minimum: 0 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        low: { type: number, minimum: 0 }
+        high: { type: number, minimum: 0 }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        citationIds: { type: array, items: { type: string, minLength: 1 }, default: [] }
+    Comparable:
+      type: object
+      required: [comparableId, channel, evidenceType, price, currency]
+      properties:
+        comparableId: { type: string, minLength: 1 }
+        channel: { type: string, minLength: 1, maxLength: 120 }
+        evidenceType: { type: string, enum: [active_asking, completed_sale, retail_offer] }
+        price: { type: number, minimum: 0, maximum: 999999999999.99, multipleOf: 0.01 }
+        shipping: { type: number, minimum: 0, maximum: 999999999999.99, multipleOf: 0.01 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        condition: { type: string, minLength: 1, maxLength: 120 }
+        observedAt: { type: string, format: date-time }
+        soldAt: { type: string, format: date-time }
+        sampleSize: { type: integer, minimum: 1, maximum: 2147483647 }
+        sampleWindow: { type: string, minLength: 1, maxLength: 160 }
+        url: { type: string, format: uri }
+        citationId: { type: string, minLength: 1 }
+        notes: { type: string, maxLength: 4000 }
+    Risk:
+      type: object
+      required: [description, severity]
+      properties:
+        description: { type: string, minLength: 1 }
+        severity: { type: string, enum: [low, medium, high, critical] }
+        citationIds: { type: array, items: { type: string, minLength: 1 }, default: [] }
+    Diagnostic:
+      type: object
+      required: [path, code, message]
+      properties:
+        path:
+          type: array
+          items: { oneOf: [{ type: string }, { type: number }] }
+        code: { type: string, minLength: 1 }
+        message: { type: string, minLength: 1 }
+    ResearchRecord:
+      type: object
+      required: [reference, status, claims, marketEstimates, risks, citations, diagnostics]
+      properties:
+        reference: { $ref: '#/components/schemas/ResearchReference' }
+        status: { type: string, enum: [valid, partial, invalid] }
+        claims: { type: array, items: { $ref: '#/components/schemas/Claim' } }
+        marketEstimates: { type: array, items: { $ref: '#/components/schemas/MarketEstimate' } }
+        comparables: { type: array, items: { $ref: '#/components/schemas/Comparable' } }
+        risks: { type: array, items: { $ref: '#/components/schemas/Risk' } }
+        citations: { type: array, items: { $ref: '#/components/schemas/Citation' } }
+        diagnostics: { type: array, items: { $ref: '#/components/schemas/Diagnostic' } }
+    ResearchResult:
+      type: object
+      required: [resultVersion, packetVersion, promptVersion, schemaVersion, packetId, resultId, completedAt, records]
+      properties:
+        resultVersion: { const: '1.0' }
+        packetVersion: { const: '1.0' }
+        promptVersion: { const: '1.0' }
+        schemaVersion: { const: '1.0' }
+        packetId: { type: string, minLength: 1 }
+        resultId: { type: string, minLength: 1 }
+        completedAt: { type: string, format: date-time }
+        records: { type: array, minItems: 1, items: { $ref: '#/components/schemas/ResearchRecord' } }
