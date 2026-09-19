@@ -37,6 +37,7 @@ export const catalogSourceSummarySchema = z.object({
   summary: z.string(),
   currency: z.string().nullable(),
   stockCardsEnabled: z.boolean(),
+  robotsPolicy: z.enum(['respect', 'operator_approved']),
   createdAt: z.string(),
 })
 
@@ -57,5 +58,5 @@ export const updateSourceScheduleSchema = z.object({
 })
 export type UpdateSourceScheduleInput = z.infer<typeof updateSourceScheduleSchema>
 
-export const updateSourceCatalogOptionsSchema = z.object({ sourceId: z.uuid(), currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).or(z.literal('')), stockCardsEnabled: z.boolean() })
+export const updateSourceCatalogOptionsSchema = z.object({ sourceId: z.uuid(), currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).or(z.literal('')), stockCardsEnabled: z.boolean(), robotsPolicy: z.enum(['respect', 'operator_approved']) })
 export type UpdateSourceCatalogOptionsInput = z.infer<typeof updateSourceCatalogOptionsSchema>

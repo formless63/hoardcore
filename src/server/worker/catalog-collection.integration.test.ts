@@ -74,6 +74,26 @@ describe.skipIf(!testDatabaseUrl)('catalog collection worker safety', () => {
     expect(http.mock.calls[0]?.[0]).toContain('page=2')
   })
 
+  it('uses an explicit operator approval without making a robots.txt request', async () => {
+    const normalized = normalizeShopifyCatalogUrl(`https://fixture-${crypto.randomUUID()}.invalid/collections/sale`)
+    const [source] = await getDatabase().insert(catalogSources).values({
+      moduleId: 'shopify', displayName: 'Approved fixture', sourceKey: normalized.sourceKey,
+      config: { ...normalized.config, robotsPolicy: 'operator_approved' },
+    }).returning({ id: catalogSources.id })
+    sourceId = source.id
+    const [run] = await getDatabase().insert(collectionRuns).values({ sourceId, requestLimit: 1 }).returning({ id: collectionRuns.id })
+    const http = vi.fn().mockResolvedValue(new Response(JSON.stringify({ products: [] }), { headers: { 'content-type': 'application/json' } }))
+
+    await runCatalogCollection({ sourceId, runId: run.id }, { logger: { info: vi.fn() } }, { collectionEnabled: true, http })
+
+    const [recorded] = await getDatabase().select().from(collectionRuns).where(eq(collectionRuns.id, run.id))
+    const events = await getDatabase().select().from(collectionRunEvents).where(eq(collectionRunEvents.runId, run.id))
+    expect(recorded).toMatchObject({ status: 'succeeded', requestCount: '1' })
+    expect(http).toHaveBeenCalledOnce()
+    expect(http.mock.calls[0]?.[0]).toContain('products.json')
+    expect(events.some((event) => event.message.includes('robots.txt preflight skipped'))).toBe(true)
+  })
+
   it('checkpoints a full page and queues the configured discretionary inter-page wait', async () => {
     const normalized = normalizeShopifyCatalogUrl(`https://fixture-${crypto.randomUUID()}.invalid/collections/sale`)
     const [source] = await getDatabase().insert(catalogSources).values({

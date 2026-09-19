@@ -88,12 +88,12 @@ describeWithDatabase('catalog source persistence', () => {
     const [stored] = await getDatabase().select().from(catalogSources).where(inArray(catalogSources.id, [created.id]))
     await getDatabase().update(catalogSources).set({ config: { ...stored!.config, futureSetting: 'preserve' } }).where(inArray(catalogSources.id, [created.id]))
 
-    const updated = await updateSourceCatalogOptionsInDatabase({ sourceId: created.id, currency: 'USD', stockCardsEnabled: true })
-    expect(updated).toMatchObject({ currency: 'USD', stockCardsEnabled: true, scheduleCron: null })
+    const updated = await updateSourceCatalogOptionsInDatabase({ sourceId: created.id, currency: 'USD', stockCardsEnabled: true, robotsPolicy: 'operator_approved' })
+    expect(updated).toMatchObject({ currency: 'USD', stockCardsEnabled: true, robotsPolicy: 'operator_approved', scheduleCron: null })
     const [configured] = await getDatabase().select({ config: catalogSources.config }).from(catalogSources).where(inArray(catalogSources.id, [created.id]))
-    expect(configured?.config).toMatchObject({ currency: 'USD', stockCardsEnabled: true, futureSetting: 'preserve' })
+    expect(configured?.config).toMatchObject({ currency: 'USD', stockCardsEnabled: true, robotsPolicy: 'operator_approved', futureSetting: 'preserve' })
 
     await getDatabase().insert(collectionRuns).values({ sourceId: created.id, status: 'queued' })
-    await expect(updateSourceCatalogOptionsInDatabase({ sourceId: created.id, currency: '', stockCardsEnabled: false })).rejects.toThrow('active collection')
+    await expect(updateSourceCatalogOptionsInDatabase({ sourceId: created.id, currency: '', stockCardsEnabled: false, robotsPolicy: 'respect' })).rejects.toThrow('active collection')
   })
 })

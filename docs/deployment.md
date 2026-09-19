@@ -165,7 +165,10 @@ sent to a different endpoint. Restart the app after changing these variables.
 Collection is operator-controlled and source-specific. Use a stable identifiable user agent,
 conservative configured pacing/concurrency and request ceilings, cached or conditional requests,
 `Retry-After` handling, and backoff. Respect published access controls and `robots.txt` where
-applicable. Stop on persistent rejection.
+applicable. Shopify sources check `robots.txt` by default. An operator who has independently
+approved collection may explicitly select **Operator-approved access** for that source; this skips
+only the `robots.txt` preflight. Pacing, finite request limits, `Retry-After`, and stop-on-rejection
+behavior remain enforced. Stop on persistent rejection.
 
 Schedules are configured per registration on **Sources**, alongside the manual run controls.
 New sources remain **manual only** until an operator enters a five-field cron schedule, chooses an
@@ -176,13 +179,13 @@ through the UI. The same page can pause a source; pause
 blocks both manual and scheduled runs. The deployment-wide `CATALOG_COLLECTION_ENABLED=false`
 gate remains authoritative even if a schedule is saved. The in-process worker checks due sources
 once per minute, but does not send source requests for manual-only or paused sources. A scheduled
-run never overrides the normal access checks, pacing, request ceiling, or active-run limit.
+run never overrides the selected per-source access policy, pacing, request ceiling, or active-run limit.
 
 Manual runs can add an optional 1–5 minute inter-page wait with a live countdown. The **Continue
 sooner** control skips only that discretionary wait; it cannot skip minimum pacing, `Retry-After`,
 or an access-policy denial. A Shopify source may opt into collection-card stock counts when its
 catalog JSON omits them. This adds a paced HTML request for each catalog page, using the same
-finite run budget, robots checks, and rejection handling. Increase the request ceiling deliberately
+finite run budget, selected access policy, and rejection handling. Increase the request ceiling deliberately
 for that mode; it never requests every product page. A complete snapshot alone can mark previously
 seen listings missing. Partial, failed, and not-modified runs do not imply absence.
 

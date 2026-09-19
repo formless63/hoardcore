@@ -15,6 +15,7 @@ export type { ShopifyCacheEntry, ShopifyCollectionFetchResult, ShopifyHttpClient
 
 export const shopifySourceConfigSchema = z.object({ catalogUrl: z.url(), currency: currencyCodeSchema.optional() }).extend({
   stockCardsEnabled: z.boolean().default(false),
+  robotsPolicy: z.enum(['respect', 'operator_approved']).default('respect'),
   minimumDelayMs: z.number().int().nonnegative().default(shopifyCollectionPolicyDefaults.minimumDelayMs),
   maxRequests: z.number().int().positive().default(shopifyCollectionPolicyDefaults.maxRequests),
   maxRetries: z.number().int().nonnegative().default(shopifyCollectionPolicyDefaults.maxRetries),

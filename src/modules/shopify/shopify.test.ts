@@ -14,6 +14,10 @@ describe('Shopify source registration', () => {
     expect(enabled.config).toHaveProperty('stockCardsEnabled', true)
     expect(shopifyModule.sourceRegistration.read(enabled.config).config).toHaveProperty('stockCardsEnabled', true)
   })
+  it('defaults to robots.txt checks while preserving an explicit operator approval', () => {
+    expect(shopifyModule.sourceRegistration.read({ catalogUrl: 'https://store.invalid/' }).config).toHaveProperty('robotsPolicy', 'respect')
+    expect(shopifyModule.sourceRegistration.read({ catalogUrl: 'https://store.invalid/', robotsPolicy: 'operator_approved' }).config).toHaveProperty('robotsPolicy', 'operator_approved')
+  })
   it('accepts a bare hostname and normalizes it to an HTTPS origin', () => {
     expect(shopifyModule.sourceRegistration.normalize({ catalogUrl: 'Example.myshopify.com' }))
       .toEqual({

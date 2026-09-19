@@ -51,6 +51,7 @@ function summarizeCatalogSource(source: CatalogSource): CatalogSourceSummary {
       summary: 'Source module unavailable',
       currency: null,
       stockCardsEnabled: false,
+      robotsPolicy: 'respect',
       createdAt: source.createdAt.toISOString(),
     })
   }
@@ -72,6 +73,7 @@ function summarizeCatalogSource(source: CatalogSource): CatalogSourceSummary {
     summary: normalized.summary,
     currency: typeof normalized.config.currency === 'string' ? normalized.config.currency : null,
     stockCardsEnabled: normalized.config.stockCardsEnabled === true,
+    robotsPolicy: normalized.config.robotsPolicy === 'operator_approved' ? 'operator_approved' : 'respect',
     createdAt: source.createdAt.toISOString(),
   })
 }
@@ -100,7 +102,7 @@ export async function updateSourceCatalogOptionsInDatabase(input: UpdateSourceCa
   const [activeRun] = await getDatabase().select({ id: collectionRuns.id }).from(collectionRuns)
     .where(and(eq(collectionRuns.sourceId, input.sourceId), inArray(collectionRuns.status, ['queued', 'running']))).limit(1)
   if (activeRun) throw new Error('Pause or finish the active collection before changing catalog options')
-  const nextConfig = { ...source.config, ...(input.currency ? { currency: input.currency } : {}), stockCardsEnabled: input.stockCardsEnabled }
+  const nextConfig = { ...source.config, ...(input.currency ? { currency: input.currency } : {}), stockCardsEnabled: input.stockCardsEnabled, robotsPolicy: input.robotsPolicy }
   if (!input.currency) delete nextConfig.currency
   const [updated] = await getDatabase().update(catalogSources).set({ config: nextConfig, updatedAt: new Date() }).where(eq(catalogSources.id, input.sourceId)).returning()
   if (!updated) throw new Error('Catalog source not found')

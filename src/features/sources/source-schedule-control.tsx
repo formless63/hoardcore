@@ -39,7 +39,7 @@ export function SourceScheduleControl({ source }: { source: CatalogSourceSummary
       <Input aria-label={`Schedule timezone for ${source.displayName}`} className="mt-1 h-8 text-xs" list={timeZoneListId} value={timeZone} disabled={!enabled || !cron} onChange={(event) => setTimeZone(event.target.value)} />
       <datalist id={timeZoneListId}><option value="UTC" /><option value="America/New_York" /><option value="America/Chicago" /><option value="America/Denver" /><option value="America/Los_Angeles" /></datalist>
     </label>
-    <label className="text-muted-foreground" title="Hard cap for the whole scheduled collection, including access-policy checks and retries.">Max requests
+    <label className="text-muted-foreground" title="Hard cap for the whole scheduled collection, including any configured preflight and retries.">Max requests
       <Input aria-label={`Scheduled maximum requests for ${source.displayName}`} className="mt-1 !h-7 !w-12 !px-1.5" type="number" min={2} max={20} step={1} value={requestLimit} disabled={!enabled || !cron} onChange={(event) => setRequestLimit(Number(event.target.value))} />
     </label>
     <Button size="small" variant="secondary" disabled={!changed || busy || Boolean(cronError) || !Number.isInteger(requestLimit) || requestLimit < 2 || requestLimit > 20} onClick={() => void save()}>{busy ? 'Saving…' : 'Save'}</Button>

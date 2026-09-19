@@ -21,8 +21,9 @@ Operator acceptance of each deployment remains important.
 - Catalog source registration for many independent source scopes, including module-owned Shopify
   storefront and collection-scope validation.
 - Fixture-driven, conservative Shopify collection transport and snapshot persistence, with
-  durable page checkpoints and an optional collection-card stock-count supplement. Each
-  installation must validate access and behavior against its own approved sources.
+  durable page checkpoints, default `robots.txt` checks, an explicit operator-approved access
+  mode, and an optional collection-card stock-count supplement. Each installation must validate
+  access and behavior against its own approved sources.
 - Per-source collection enable/pause and opt-in five-field cron schedules with explicit IANA
   timezones and bounded request ceilings. New sources default to manual-only; the deployment-wide
   collection gate still applies.

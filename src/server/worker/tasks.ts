@@ -133,12 +133,16 @@ export async function runCatalogCollection(
       catalogUrl: normalizeShopifyCatalogUrl(persistedPolicy.catalogUrl).config.catalogUrl as string,
       maxRequests: runRecord.requestLimit,
     }
-    await log('Collection started. Checking source access policy.')
+    await log(persistedPolicy.robotsPolicy === 'operator_approved'
+      ? 'Collection started with operator-approved access; robots.txt preflight skipped.'
+      : 'Collection started. Checking source access policy.')
     const http = dependencies.http ?? createSecureShopifyHttpClient({ resolver: dependencies.resolver, request: dependencies.request })
-    const accessPolicy = dependencies.accessPolicy ?? createRobotsAccessPolicy(run, http, policy.userAgent, async (requestCount, status, failureCode) => {
-      await log(failureCode ? `robots.txt check failed (${failureCode}); collection stopped.`
-        : status === undefined ? 'Checking robots.txt.' : `robots.txt responded with HTTP ${status}.`, requestCount)
-    })
+    const accessPolicy = dependencies.accessPolicy ?? (persistedPolicy.robotsPolicy === 'operator_approved'
+      ? async () => true
+      : createRobotsAccessPolicy(run, http, policy.userAgent, async (requestCount, status, failureCode) => {
+        await log(failureCode ? `robots.txt check failed (${failureCode}); collection stopped.`
+          : status === undefined ? 'Checking robots.txt.' : `robots.txt responded with HTTP ${status}.`, requestCount)
+      }))
     const catalogUrl = policy.catalogUrl
   // A first-page validator cannot prove a previously paginated collection is
   // unchanged: later pages may have changed independently. Fetch page one
