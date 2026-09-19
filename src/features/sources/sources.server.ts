@@ -10,6 +10,7 @@ import {
   type UpdateSourceCatalogOptionsInput,
 } from './sources.schemas'
 import { shopifySourceConfigSchema } from '~/modules/shopify'
+import { nextCronRun } from './source-schedule'
 
 function isUniqueConstraintViolation(error: unknown): boolean {
   let current = error
@@ -42,7 +43,9 @@ function summarizeCatalogSource(source: CatalogSource): CatalogSourceSummary {
       moduleName: source.moduleId,
       status: source.status,
       collectionEnabled: source.collectionEnabled,
-      scheduleHours: source.scheduleHours,
+      scheduleCron: source.scheduleCron,
+      scheduleTimezone: source.scheduleTimezone,
+      legacyScheduleHours: source.scheduleHours,
       scheduleRequestLimit: source.scheduleRequestLimit,
       nextRunAt: source.nextRunAt?.toISOString() ?? null,
       summary: 'Source module unavailable',
@@ -61,7 +64,9 @@ function summarizeCatalogSource(source: CatalogSource): CatalogSourceSummary {
     moduleName: sourceModule.manifest.name,
     status: source.status,
     collectionEnabled: source.collectionEnabled,
-    scheduleHours: source.scheduleHours,
+    scheduleCron: source.scheduleCron,
+    scheduleTimezone: source.scheduleTimezone,
+    legacyScheduleHours: source.scheduleHours,
     scheduleRequestLimit: source.scheduleRequestLimit,
     nextRunAt: source.nextRunAt?.toISOString() ?? null,
     summary: normalized.summary,
@@ -74,10 +79,12 @@ function summarizeCatalogSource(source: CatalogSource): CatalogSourceSummary {
 export async function updateSourceScheduleInDatabase(input: UpdateSourceScheduleInput): Promise<CatalogSourceSummary> {
   const [source] = await getDatabase().update(catalogSources).set({
     collectionEnabled: input.collectionEnabled,
-    scheduleHours: input.scheduleHours,
+    scheduleHours: null,
+    scheduleCron: input.scheduleCron,
+    scheduleTimezone: input.scheduleTimezone,
     scheduleRequestLimit: input.scheduleRequestLimit,
-    nextRunAt: input.collectionEnabled && input.scheduleHours
-      ? new Date(Date.now() + input.scheduleHours * 60 * 60 * 1000)
+    nextRunAt: input.collectionEnabled && input.scheduleCron
+      ? nextCronRun(input.scheduleCron, input.scheduleTimezone)
       : null,
     updatedAt: new Date(),
   }).where(eq(catalogSources.id, input.sourceId)).returning()

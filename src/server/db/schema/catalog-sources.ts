@@ -17,6 +17,8 @@ export const catalogSources = pgTable(
     status: catalogSourceStatus('status').default('not_collected').notNull(),
     collectionEnabled: boolean('collection_enabled').default(true).notNull(),
     scheduleHours: integer('schedule_hours'),
+    scheduleCron: text('schedule_cron'),
+    scheduleTimezone: text('schedule_timezone').default('UTC').notNull(),
     scheduleRequestLimit: integer('schedule_request_limit').default(10).notNull(),
     nextRunAt: timestamp('next_run_at', { withTimezone: true }),
     config: jsonb('config').$type<Record<string, unknown>>().default({}).notNull(),

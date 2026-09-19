@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { DEFAULT_SCHEDULE_TIME_ZONE, validateCollectionCron } from './source-schedule'
 
 export const catalogSourceStatusSchema = z.enum([
   'not_collected',
@@ -28,7 +29,9 @@ export const catalogSourceSummarySchema = z.object({
   moduleName: z.string(),
   status: catalogSourceStatusSchema,
   collectionEnabled: z.boolean(),
-  scheduleHours: z.union([z.literal(24), z.literal(72), z.literal(168)]).nullable(),
+  scheduleCron: z.string().nullable(),
+  scheduleTimezone: z.string(),
+  legacyScheduleHours: z.number().int().positive().nullable(),
   scheduleRequestLimit: manualCollectionRequestLimitSchema,
   nextRunAt: z.string().nullable(),
   summary: z.string(),
@@ -44,8 +47,13 @@ export type CatalogSourceSummary = z.infer<typeof catalogSourceSummarySchema>
 export const updateSourceScheduleSchema = z.object({
   sourceId: z.uuid(),
   collectionEnabled: z.boolean(),
-  scheduleHours: z.union([z.literal(24), z.literal(72), z.literal(168)]).nullable(),
+  scheduleCron: z.string().trim().max(120).nullable(),
+  scheduleTimezone: z.string().trim().min(1).max(100).default(DEFAULT_SCHEDULE_TIME_ZONE),
   scheduleRequestLimit: manualCollectionRequestLimitSchema,
+}).superRefine((value, context) => {
+  if (!value.scheduleCron) return
+  const error = validateCollectionCron(value.scheduleCron, value.scheduleTimezone)
+  if (error) context.addIssue({ code: 'custom', path: ['scheduleCron'], message: error })
 })
 export type UpdateSourceScheduleInput = z.infer<typeof updateSourceScheduleSchema>
 

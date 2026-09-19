@@ -51,21 +51,16 @@ export function SourceRunControl({ sourceId, run, defaultRequestLimit = 3, disab
     catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not start collection') }
     finally { setBusy(false) }
   }
-  return <div className="flex min-w-48 flex-col items-end gap-2">
-    {run ? <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-muted-foreground"><Badge variant={run.status === 'failed' ? 'danger' : run.status === 'succeeded' ? 'success' : 'info'}>{labels[run.status]}</Badge><span>{run.requestCount}/{run.requestLimit} requests</span><span>{run.pageCount} pages · {run.productCount} products</span><time dateTime={run.completedAt?.toISOString() ?? run.createdAt.toISOString()}>{(run.completedAt ?? run.createdAt).toLocaleString()}</time></div> : <span className="text-xs text-muted-foreground">No collection runs</span>}
-    {run ? <Link className="text-xs text-primary underline-offset-2 hover:underline" to="/runs/$runId" params={{ runId: run.id }}>View run log</Link> : null}
-    <label className="flex items-center gap-2 text-xs text-muted-foreground">Request ceiling
-      <Input className="h-8 w-20" type="number" min={2} max={20} step={1} value={requestLimit} onChange={(event) => setRequestLimit(Number(event.target.value))} />
-    </label>
-    <label className="flex items-center gap-2 text-xs text-muted-foreground">Wait between full pages (minutes)
-      <Input className="h-8 w-20" type="number" min={0} max={5} step={1} value={interPageWaitMinutes} onChange={(event) => setInterPageWaitMinutes(Number(event.target.value))} />
-    </label>
-    <p className="max-w-60 text-right text-xs text-muted-foreground">0 disables the optional wait; 1–5 minutes keeps long pauses durable. Continue sooner may shorten only this optional wait, never minimum pacing or source Retry-After. The request ceiling includes the access-policy check.</p>
-    <div className="flex flex-wrap justify-end gap-2">
+  return <div className="grid gap-2 text-xs xl:grid-cols-[minmax(0,1fr)_auto_auto_auto] xl:items-end">
+    <div className="flex flex-wrap items-center gap-2 self-center text-muted-foreground">{run ? <><Badge variant={run.status === 'failed' ? 'danger' : run.status === 'succeeded' ? 'success' : 'info'}>{labels[run.status]}</Badge><span>{run.requestCount}/{run.requestLimit} requests</span><span>{run.pageCount} pages · {run.productCount} products</span><time dateTime={run.completedAt?.toISOString() ?? run.createdAt.toISOString()}>{(run.completedAt ?? run.createdAt).toLocaleString()}</time><Link className="text-primary underline-offset-2 hover:underline" to="/runs/$runId" params={{ runId: run.id }}>Log</Link></> : <span>No collection runs</span>}</div>
+    <label className="text-muted-foreground">Request ceiling <Input className="ml-1 h-8 w-16" type="number" min={2} max={20} step={1} value={requestLimit} onChange={(event) => setRequestLimit(Number(event.target.value))} /></label>
+    <label className="text-muted-foreground">Page wait <Input aria-label="Wait between full pages in minutes" className="ml-1 h-8 w-14" type="number" min={0} max={5} step={1} value={interPageWaitMinutes} onChange={(event) => setInterPageWaitMinutes(Number(event.target.value))} /> min</label>
+    <div className="flex flex-wrap justify-end gap-1.5">
       <Button disabled={disabled || busy || requestLimit < 2 || requestLimit > 20 || !Number.isInteger(requestLimit) || !Number.isInteger(interPageWaitMinutes) || interPageWaitMinutes < 0 || interPageWaitMinutes > 5 || run?.status === 'queued' || run?.status === 'running'} size="small" variant="secondary" onClick={() => void start(false)}>{busy ? 'Starting…' : 'Run in background'}</Button>
       <Button disabled={disabled || busy || requestLimit < 2 || requestLimit > 20 || !Number.isInteger(requestLimit) || !Number.isInteger(interPageWaitMinutes) || interPageWaitMinutes < 0 || interPageWaitMinutes > 5 || run?.status === 'queued' || run?.status === 'running'} size="small" onClick={() => void start(true)}>Run &amp; watch</Button>
     </div>
-    {(run?.status === 'failed' || run?.status === 'partial') && run.error ? <p className="max-w-xs text-right text-xs text-destructive" role="alert">{run.error}</p> : null}
-    {error ? <p className="max-w-xs text-right text-xs text-destructive" role="alert">{error}</p> : null}
+    <details className="text-muted-foreground xl:col-span-4"><summary className="cursor-pointer">Collection safety limits</summary><p className="mt-1 max-w-3xl">The ceiling includes the access-policy check. The optional 0–5 minute page wait never replaces minimum pacing or source Retry-After.</p></details>
+    {(run?.status === 'failed' || run?.status === 'partial') && run.error ? <p className="text-destructive xl:col-span-4" role="alert">{run.error}</p> : null}
+    {error ? <p className="text-destructive xl:col-span-4" role="alert">{error}</p> : null}
   </div>
 }

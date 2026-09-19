@@ -31,8 +31,8 @@ type ChangeRow = {
   outOfStockTotal: string
 }
 
-type NewRow = { id: string; title: string; sourceName: string; createdAt: Date | string }
-type PresenceRow = { id: string; title: string; sourceName: string; kind: string; runId: string | null; at: Date | string | null }
+type NewRow = { id: string; title: string; sourceName: string; createdAt: Date | string; newTotal: string }
+type PresenceRow = { id: string; title: string; sourceName: string; kind: string; runId: string | null; at: Date | string | null; presenceTotal: string }
 type ActivityRow = { day: string; runs: string; observations: string }
 
 /** Drizzle raw SQL may surface timestamptz as a Date or an ISO string. */
@@ -45,7 +45,7 @@ export async function getOverviewFromDatabase(days: 7 | 30) {
   const [sourceResult, changeResult, newResult, activityResult, presenceResult] = await Promise.all([
     db.execute<SourceRow>(sql`
       select s.id, s.display_name as "name", s.status,
-        count(c.listing_id) filter (where c.presence = 'present')::text as "total",
+        count(c.listing_id)::text as "total",
         count(c.listing_id) filter (where c.presence = 'present' and c.available)::text as "inStock",
         count(c.listing_id) filter (where c.presence = 'present' and not c.available)::text as "outOfStock",
         count(c.listing_id) filter (where c.presence = 'present' and c.stock_quantity is not null)::text as "quantityKnown",
@@ -88,9 +88,10 @@ export async function getOverviewFromDatabase(days: 7 | 30) {
       limit 300
     `),
     db.execute<NewRow>(sql`
-      select l.id, c.title, s.display_name as "sourceName", l.created_at as "createdAt"
+      select l.id, c.title, s.display_name as "sourceName", l.created_at as "createdAt",
+        count(*) over()::text as "newTotal"
       from source_listings l
-      join source_listing_current c on c.listing_id = l.id and c.presence = 'present'
+      join source_listing_current c on c.listing_id = l.id
       join catalog_sources s on s.id = l.source_id
       where l.created_at >= now() - ${days} * interval '1 day'
       order by l.created_at desc limit 8
@@ -118,7 +119,8 @@ export async function getOverviewFromDatabase(days: 7 | 30) {
       select l.id, c.title, s.display_name as "sourceName",
         case when c.presence = 'missing' then 'missing' else 'reappeared' end as kind,
         case when c.presence = 'missing' then c.missing_run_id else c.reappeared_run_id end as "runId",
-        case when c.presence = 'missing' then c.missing_since else c.reappeared_at end as at
+        case when c.presence = 'missing' then c.missing_since else c.reappeared_at end as at,
+        count(*) over()::text as "presenceTotal"
       from source_listing_current c join source_listings l on l.id = c.listing_id
       join catalog_sources s on s.id = l.source_id
       where (c.presence = 'missing' and c.missing_since >= now() - ${days} * interval '1 day')
@@ -153,6 +155,12 @@ export async function getOverviewFromDatabase(days: 7 | 30) {
     previousAvailable: row.previousAvailable,
     observedAt: overviewTimestamp(row.observedAt)!,
   }))
+  const recentlyAdded = newResult.rows.map((row) => ({ id: row.id, title: row.title, sourceName: row.sourceName, createdAt: overviewTimestamp(row.createdAt)! }))
+  const presenceChanges = presenceResult.rows.map((row) => ({ id: row.id, title: row.title, sourceName: row.sourceName, kind: row.kind, runId: row.runId, at: overviewTimestamp(row.at) }))
+  const availabilityChanges = [
+    ...changes.filter((change) => change.previousAvailable !== change.available).map((change) => ({ id: change.id, title: change.title, sourceName: change.sourceName, kind: change.available ? 'back_in_stock' : 'out_of_stock', at: change.observedAt })),
+    ...presenceChanges.map((change) => ({ id: change.id, title: change.title, sourceName: change.sourceName, kind: change.kind, at: change.at })),
+  ].filter((change) => change.at).sort((left, right) => Date.parse(right.at!) - Date.parse(left.at!)).slice(0, 100)
   return {
     days,
     sources,
@@ -162,13 +170,17 @@ export async function getOverviewFromDatabase(days: 7 | 30) {
       outOfStock: sources.reduce((sum, source) => sum + source.outOfStock, 0),
       quantityKnown: sources.reduce((sum, source) => sum + source.quantityKnown, 0),
       missing: sources.reduce((sum, source) => sum + source.missing, 0),
+      unavailable: sources.reduce((sum, source) => sum + source.outOfStock + source.missing, 0),
     },
     changes,
     changeTotal: Number(changeResult.rows[0]?.changeTotal ?? 0),
     newlyOutOfStockTotal: Number(changeResult.rows[0]?.outOfStockTotal ?? 0),
     newlyOutOfStock: changes.filter((change) => change.previousAvailable && !change.available).slice(0, 8),
-    recentlyAdded: newResult.rows.map((row) => ({ ...row, createdAt: overviewTimestamp(row.createdAt)! })),
+    recentlyAdded,
+    recentlyAddedTotal: Number(newResult.rows[0]?.newTotal ?? 0),
     activity: activityResult.rows.map((row) => ({ day: row.day, runs: Number(row.runs), observations: Number(row.observations) })),
-    presenceChanges: presenceResult.rows.map((row) => ({ ...row, at: overviewTimestamp(row.at) })),
+    presenceChanges,
+    presenceChangeTotal: Number(presenceResult.rows[0]?.presenceTotal ?? 0),
+    availabilityChanges,
   }
 }

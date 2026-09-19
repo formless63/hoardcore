@@ -39,6 +39,8 @@
     "@tanstack/react-table": "^9.2.4",
     "better-auth": "^1.7.5",
     "cheerio": "^1.2.0",
+    "croner": "10.0.1",
+    "cronstrue": "3.27.0",
     "drizzle-orm": "^0.45.2",
     "graphile-worker": "^0.18.0",
     "next-themes": "^0.4.6",

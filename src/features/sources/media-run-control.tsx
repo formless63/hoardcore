@@ -26,11 +26,11 @@ export function MediaRunControl({ sourceId, enabled, run }: { sourceId: string; 
       setMessage(error instanceof Error ? error.message : 'Could not queue photo capture')
     } finally { setBusy(false) }
   }
-  return <div className="flex max-w-sm flex-wrap items-center justify-end gap-1.5 border-t border-border pt-2 text-xs">
-    {run ? <span className="w-full text-right text-muted-foreground">Photo batch {run.status}: {run.capturedCount} saved · {run.requestCount}/{run.requestLimit} requests{run.error ? ` · ${run.error}` : ''}</span> : null}
+  return <div className="flex flex-wrap items-center gap-1.5 text-xs">
+    {run ? <span className="text-muted-foreground">Last batch {run.status}: {run.capturedCount} saved · {run.requestCount}/{run.requestLimit} requests{run.error ? ` · ${run.error}` : ''}</span> : null}
     <label className="text-muted-foreground">Photo request ceiling <input type="number" min={2} max={100} step={1} value={limit} onChange={(event) => setLimit(Number(event.target.value))} className="ml-1 h-7 w-14 rounded border border-border bg-background px-1" /></label>
     <button type="button" disabled={!enabled || busy || run?.status === 'queued' || run?.status === 'running' || !Number.isInteger(limit) || limit < 2 || limit > 100} onClick={() => void start()} className="h-7 rounded border border-border px-2 text-foreground disabled:opacity-40">{busy ? 'Queueing…' : 'Capture photos'}</button>
-    {!enabled ? <span className="w-full text-right text-muted-foreground">Off on this deployment. Enable only on an approved collection host.</span> : null}
-    {message ? <span role="status" className="w-full text-right text-muted-foreground">{message}</span> : null}
+    {!enabled ? <span className="text-muted-foreground">Disabled on this host.</span> : null}
+    {message ? <span role="status" className="text-muted-foreground">{message}</span> : null}
   </div>
 }

@@ -17,6 +17,7 @@ import { getServerConfig } from '~/server/config.server'
 import { mediaCaptureRuns } from '~/server/db/schema/media'
 import { evaluateCollectionAlertsTask, deliverAlertsTask, type AlertTaskPayload, type AlertDeliveryTaskPayload } from '~/features/alerts/alerts.tasks'
 import { COLLECTION_DISABLED_MESSAGE } from '~/features/sources/collection-gate'
+import { nextCronRun } from '~/features/sources/source-schedule'
 
 /** Payloads for the application-owned durable task names. */
 export interface HoardcoreTaskPayloads {
@@ -328,20 +329,24 @@ export const catalogScheduleTask: Task<'catalog_schedule'> = async (_payload, he
   const now = new Date()
   const due = await db.select().from(catalogSources).where(and(
     eq(catalogSources.collectionEnabled, true),
-    isNotNull(catalogSources.scheduleHours),
+    or(isNotNull(catalogSources.scheduleCron), isNotNull(catalogSources.scheduleHours)),
     lte(catalogSources.nextRunAt, now),
   )).orderBy(catalogSources.nextRunAt).limit(20)
   for (const source of due) {
-    if (!source.scheduleHours) continue
-    const nextRunAt = new Date(now.getTime() + source.scheduleHours * 60 * 60 * 1000)
+    if (!source.scheduleCron && !source.scheduleHours) continue
     try {
+      const nextRunAt = source.scheduleCron
+        ? nextCronRun(source.scheduleCron, source.scheduleTimezone, now)
+        : new Date(now.getTime() + source.scheduleHours! * 60 * 60 * 1000)
       // Claim the due slot before enqueuing. A concurrent pause or schedule edit
       // invalidates this exact timestamp and cannot trigger an unwanted run.
       const claimed = await db.update(catalogSources).set({ nextRunAt, updatedAt: now }).where(and(
         eq(catalogSources.id, source.id),
         eq(catalogSources.collectionEnabled, true),
         eq(catalogSources.nextRunAt, source.nextRunAt!),
-        eq(catalogSources.scheduleHours, source.scheduleHours),
+        source.scheduleCron
+          ? and(eq(catalogSources.scheduleCron, source.scheduleCron), eq(catalogSources.scheduleTimezone, source.scheduleTimezone))
+          : eq(catalogSources.scheduleHours, source.scheduleHours!),
       )).returning({ id: catalogSources.id })
       if (!claimed.length) continue
       const [run] = await db.insert(collectionRuns).values({ sourceId: source.id, requestLimit: source.scheduleRequestLimit }).onConflictDoNothing().returning({ id: collectionRuns.id })

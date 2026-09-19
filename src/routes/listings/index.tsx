@@ -35,7 +35,7 @@ function ListingsPage() {
   const { listingPage, savedViews, watchedListingIds, researchSummaries } = Route.useLoaderData()
   const workbench = Route.useSearch()
   return (
-    <main className="w-full px-1 py-2 sm:px-2" id="main-content">
+    <main className="w-full px-1 py-1 sm:px-2" id="main-content">
       <h1 className="sr-only">Current listings</h1>
       <CurrentListingsTable listingPage={listingPage} savedViews={savedViews} watchedListingIds={watchedListingIds} researchSummaries={researchSummaries} workbench={workbench} />
     </main>

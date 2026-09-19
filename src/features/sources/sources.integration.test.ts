@@ -72,12 +72,12 @@ describeWithDatabase('catalog source persistence', () => {
     const host = `example-${crypto.randomUUID()}.myshopify.com`
     const created = await createCatalogSourceInDatabase({ displayName: 'Scheduled source', moduleId: 'shopify', config: { catalogUrl: `https://${host}/collections/sale` } })
     createdSourceIds.push(created.id)
-    expect(created.scheduleHours).toBeNull()
+    expect(created.scheduleCron).toBeNull()
     expect(created.nextRunAt).toBeNull()
-    const scheduled = await updateSourceScheduleInDatabase({ sourceId: created.id, collectionEnabled: true, scheduleHours: 72, scheduleRequestLimit: 10 })
-    expect(scheduled).toMatchObject({ collectionEnabled: true, scheduleHours: 72, scheduleRequestLimit: 10 })
+    const scheduled = await updateSourceScheduleInDatabase({ sourceId: created.id, collectionEnabled: true, scheduleCron: '0 9,21 * * *', scheduleTimezone: 'America/New_York', scheduleRequestLimit: 10 })
+    expect(scheduled).toMatchObject({ collectionEnabled: true, scheduleCron: '0 9,21 * * *', scheduleTimezone: 'America/New_York', scheduleRequestLimit: 10 })
     expect(scheduled.nextRunAt).not.toBeNull()
-    const paused = await updateSourceScheduleInDatabase({ sourceId: created.id, collectionEnabled: false, scheduleHours: 72, scheduleRequestLimit: 10 })
+    const paused = await updateSourceScheduleInDatabase({ sourceId: created.id, collectionEnabled: false, scheduleCron: '0 9,21 * * *', scheduleTimezone: 'America/New_York', scheduleRequestLimit: 10 })
     expect(paused).toMatchObject({ collectionEnabled: false, nextRunAt: null })
   })
 
@@ -89,7 +89,7 @@ describeWithDatabase('catalog source persistence', () => {
     await getDatabase().update(catalogSources).set({ config: { ...stored!.config, futureSetting: 'preserve' } }).where(inArray(catalogSources.id, [created.id]))
 
     const updated = await updateSourceCatalogOptionsInDatabase({ sourceId: created.id, currency: 'USD', stockCardsEnabled: true })
-    expect(updated).toMatchObject({ currency: 'USD', stockCardsEnabled: true, scheduleHours: null })
+    expect(updated).toMatchObject({ currency: 'USD', stockCardsEnabled: true, scheduleCron: null })
     const [configured] = await getDatabase().select({ config: catalogSources.config }).from(catalogSources).where(inArray(catalogSources.id, [created.id]))
     expect(configured?.config).toMatchObject({ currency: 'USD', stockCardsEnabled: true, futureSetting: 'preserve' })
 

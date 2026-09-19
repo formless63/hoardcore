@@ -168,8 +168,11 @@ conservative configured pacing/concurrency and request ceilings, cached or condi
 applicable. Stop on persistent rejection.
 
 Schedules are configured per registration on **Sources**, alongside the manual run controls.
-New and upgraded sources remain **manual only** until an operator opts into a daily, three-day,
-or weekly schedule and sets a scheduled request ceiling. The same page can pause a source; pause
+New sources remain **manual only** until an operator enters a five-field cron schedule, chooses an
+explicit IANA timezone, and sets a scheduled request ceiling. For example, `0 9,21 * * *` with
+`America/New_York` runs at 9 AM and 9 PM Eastern and follows daylight-saving changes. Schedules
+must leave at least six hours between runs. Older interval schedules remain active until replaced
+through the UI. The same page can pause a source; pause
 blocks both manual and scheduled runs. The deployment-wide `CATALOG_COLLECTION_ENABLED=false`
 gate remains authoritative even if a schedule is saved. The in-process worker checks due sources
 once per minute, but does not send source requests for manual-only or paused sources. A scheduled

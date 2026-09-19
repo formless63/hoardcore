@@ -31,15 +31,15 @@ function SourcesPage() {
   const { sources, latestRuns, latestMediaRuns, settings, mediaCapture } = Route.useLoaderData()
 
   return (
-    <main className="w-full px-2 py-3 sm:px-3" id="main-content">
+    <main className="w-full px-2 py-2 sm:px-3" id="main-content">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-base font-semibold text-foreground">Catalog sources</h1>
+        <h1 className="sr-only">Catalog sources</h1>
         <Link to="/sources/new" className={buttonStyles({ className: 'self-start' })}>
           Add source
         </Link>
       </div>
 
-      <section className="mt-3" aria-label="Registered catalog sources">
+      <section className="mt-2" aria-label="Registered catalog sources">
         <SourceList sources={sources} latestRuns={latestRuns} latestMediaRuns={latestMediaRuns} defaultRequestLimit={settings.defaultCollectionRequestLimit} mediaCaptureEnabled={mediaCapture.enabled} />
       </section>
     </main>

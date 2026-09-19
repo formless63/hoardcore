@@ -23,8 +23,9 @@ Operator acceptance of each deployment remains important.
 - Fixture-driven, conservative Shopify collection transport and snapshot persistence, with
   durable page checkpoints and an optional collection-card stock-count supplement. Each
   installation must validate access and behavior against its own approved sources.
-- Per-source collection enable/pause and opt-in daily, three-day, or weekly schedules. New sources
-  default to manual-only; the deployment-wide collection gate still applies.
+- Per-source collection enable/pause and opt-in five-field cron schedules with explicit IANA
+  timezones and bounded request ceilings. New sources default to manual-only; the deployment-wide
+  collection gate still applies.
 - Current listings tracker with source/product/variant detail, observation history, and retained
   evidence. The listings workbench has URL-persisted filters/sort, saved views, and source-specific
   category-group corrections. Listing detail includes bounded, paginated observation history,

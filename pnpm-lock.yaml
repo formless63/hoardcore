@@ -211,6 +211,12 @@ importers:
       cheerio:
         specifier: ^1.2.0
         version: 1.2.0
+      croner:
+        specifier: 10.0.1
+        version: 10.0.1
+      cronstrue:
+        specifier: 3.27.0
+        version: 3.27.0
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@types/pg@8.23.1)(kysely@0.29.5)(pg@8.23.0)
@@ -1766,6 +1772,14 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  croner@10.0.1:
+    resolution: {integrity: sha512-ixNtAJndqh173VQ4KodSdJEI6nuioBWI0V1ITNKhZZsO0pEMoDxz539T4FTTbSZ/xIOSuDnzxLVRqBVSvPNE2g==}
+    engines: {node: '>=18.0'}
+
+  cronstrue@3.27.0:
+    resolution: {integrity: sha512-AKhV4ilvx73NmicrZCGASdszUIf2ew0A/6jQQTh4pu3lIUzgWOGjT3Gv3CGIcTQ/p8Qy/tZuCmlaOftj8PXaNg==}
+    hasBin: true
 
   crossws@0.4.12:
     resolution: {integrity: sha512-aypfsr6t0uNvkqaZc6zvBfXzC6pLI0/sIulpkV6RwCVtZqG5ebBzv4weImKK0VNCj91Wl9F5j7p5WU4MNrybng==}
@@ -4011,6 +4025,10 @@ snapshots:
       path-type: 4.0.0
     optionalDependencies:
       typescript: '@typescript/typescript6@6.0.2'
+
+  croner@10.0.1: {}
+
+  cronstrue@3.27.0: {}
 
   crossws@0.4.12(srvx@0.11.22):
     optionalDependencies:
