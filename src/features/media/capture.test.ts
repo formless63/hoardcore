@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createImageDerivatives, createMediaRobotsAccessPolicy, fetchMediaBytes, MediaCaptureError } from './capture.server'
 import { mediaCandidateKey } from './media.server'
-import { isAllowedShopifyMediaUrl } from '~/modules/shopify/media-policy'
+import { isAllowedShopifyMediaUrl, usesOperatorApprovedShopifyAccess } from '~/modules/shopify/media-policy'
 
 const policy = { enabled: true, requestLimit: 5, concurrency: 3, minimumDelayMs: 1, maxRetries: 1, userAgent: 'Hoardcore test' }
 const onePixelPng = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'))
@@ -27,6 +27,11 @@ describe('media capture safety', () => {
     expect(isAllowedShopifyMediaUrl(config, 'https://cdn.shopify.com/a.jpg')).toBe(true)
     expect(isAllowedShopifyMediaUrl(config, 'https://elsewhere.example/a.jpg')).toBe(false)
     expect(isAllowedShopifyMediaUrl(config, 'http://cdn.shopify.com/a.jpg')).toBe(false)
+  })
+
+  it('requires explicit operator approval before skipping media preflights', () => {
+    expect(usesOperatorApprovedShopifyAccess({ catalogUrl: 'https://demo.example/collections/sale' })).toBe(false)
+    expect(usesOperatorApprovedShopifyAccess({ catalogUrl: 'https://demo.example/collections/sale', robotsPolicy: 'operator_approved' })).toBe(true)
   })
 
   it('requires robots permission and counts the robots request', async () => {

@@ -166,8 +166,9 @@ Collection is operator-controlled and source-specific. Use a stable identifiable
 conservative configured pacing/concurrency and request ceilings, cached or conditional requests,
 `Retry-After` handling, and backoff. Respect published access controls and `robots.txt` where
 applicable. Shopify sources check `robots.txt` by default. An operator who has independently
-approved collection may explicitly select **Operator-approved access** for that source; this skips
-only the `robots.txt` preflight. Pacing, finite request limits, `Retry-After`, and stop-on-rejection
+approved collection and media capture may explicitly select **Operator-approved access** for that
+source; this skips `robots.txt` preflights for catalog requests and module-approved media hosts.
+Pacing, finite request limits, URL allowlisting, `Retry-After`, and stop-on-rejection
 behavior remain enforced. Stop on persistent rejection.
 
 Schedules are configured per registration on **Sources**, alongside the manual run controls.

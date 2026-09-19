@@ -4,7 +4,7 @@ import sharp from 'sharp'
 import type { Database } from '~/server/db/db.server'
 import { catalogSources } from '~/server/db/schema/catalog-sources'
 import { mediaCaptureRuns, listingMedia } from '~/server/db/schema/media'
-import { isAllowedShopifyMediaUrl } from '~/modules/shopify/media-policy'
+import { isAllowedShopifyMediaUrl, usesOperatorApprovedShopifyAccess } from '~/modules/shopify/media-policy'
 import { mediaCapturePolicySchema, type MediaCapturePolicy } from './media.schemas'
 import { getCaptureCandidate, listSourceMediaCandidates, mediaCandidateKey, persistListingMedia, reuseListingMedia } from './media.server'
 
@@ -228,7 +228,9 @@ export async function captureListingMedia(input: CaptureListingMediaInput) {
   const reused = await reuseListingMedia(input.db, candidate.listingId, sourceUrl)
   if (reused) return { status: 'captured' as const, capture: reused }
   const http = input.http ?? ((url: string, init: RequestInit) => fetch(url, init) as Promise<MediaHttpResponse>)
-  const accessPolicy = input.accessPolicy ?? createMediaRobotsAccessPolicy(input.budget, http, input.policy.userAgent, input.policy.minimumDelayMs, input.wait)
+  const accessPolicy = input.accessPolicy ?? (usesOperatorApprovedShopifyAccess(candidate.config)
+    ? async () => true
+    : createMediaRobotsAccessPolicy(input.budget, http, input.policy.userAgent, input.policy.minimumDelayMs, input.wait))
   let image = input.imageCache?.get(sourceUrl)
   if (!image) {
     image = (async () => {
@@ -273,7 +275,9 @@ export async function runMediaCapture(db: Database, runId: string, dependencies:
   const policy = mediaCapturePolicySchema.parse({ enabled: true, requestLimit: run.requestLimit, ...dependencies.policy })
   const budget: MediaRequestBudget = { requests: 0, maxRequests: policy.requestLimit }
   const http = dependencies.http ?? ((url: string, init: RequestInit) => fetch(url, init) as Promise<MediaHttpResponse>)
-  const accessPolicy = dependencies.accessPolicy ?? createMediaRobotsAccessPolicy(budget, http, policy.userAgent, policy.minimumDelayMs, dependencies.wait)
+  const accessPolicy = dependencies.accessPolicy ?? (source.moduleId === 'shopify' && usesOperatorApprovedShopifyAccess(source.config)
+    ? async () => true
+    : createMediaRobotsAccessPolicy(budget, http, policy.userAgent, policy.minimumDelayMs, dependencies.wait))
   let capturedCount = 0
   let error: string | null = null
   let after = dependencies.after
