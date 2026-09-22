@@ -151,6 +151,20 @@ then submit a versioned `ResearchResult` for that packet with
 `{ "result": { ... } }`. The endpoint accepts only the token owner's packets and never contacts an
 AI provider. See `src/features/research/research.schemas.ts` for the versioned contract.
 
+### Loxep companion integration
+
+Hoardcore can publish operator-approved opportunities to a self-hosted Loxep installation. Open
+**Settings → Loxep connections** and create the Hoardcore source in Loxep first; paste Loxep's
+connection ID and reveal-once ingest token into Hoardcore. The **Send to Loxep** control appears
+for `Buy` and `Buy candidate` decisions. Hoardcore stores the outbound token encrypted, writes a
+durable delivery record, and retries transient failures through its embedded Graphile Worker.
+
+The same Hoardcore connection reveals a callback URL and token once. Loxep's matching source can
+store those values for the versioned outcome webhook at
+`POST /api/v1/hooks/loxep/{connectionId}`. Raw outcome events are retained with idempotency
+checks; lifecycle event production on the Loxep side is still intentionally narrower than the
+receiver contract. See [the API reference](https://hoardcore.com/api.html) for the wire shape.
+
 Notifications are off by default. Each user must configure a public HTTPS ntfy origin and topic,
 enable notifications globally, then opt in individual watched listings or saved filter views and
 their event types. The app does not contact ntfy until these settings are enabled. Use a private,

@@ -3,9 +3,10 @@ info:
   title: Hoardcore HTTP API
   version: 0.0.0
   description: >-
-    Implemented HTTP routes. The research import endpoint is the only stable
-    external-agent endpoint; app-internal TanStack Start server functions are
-    not part of this API.
+    Implemented HTTP routes. The research import endpoint is the stable
+    external-agent API. The companion webhook is a separate, bearer-authenticated
+    integration contract for a configured Loxep installation; app-internal
+    TanStack Start server functions are not part of this API.
 servers:
   - url: https://your-hoardcore.example
     description: Replace with your own Hoardcore app origin; the public docs site does not host the app API.
@@ -13,6 +14,7 @@ tags:
   - name: Research
   - name: Operations
   - name: Media
+  - name: Companion integrations
 paths:
   /api/research/import:
     post:
@@ -116,12 +118,63 @@ paths:
               schema: { type: string, format: binary }
         '404':
           description: Invalid capture or variant, or no matching derivative.
+  /api/v1/hooks/loxep/{connectionId}:
+    post:
+      tags: [Companion integrations]
+      summary: Receive a Loxep lifecycle outcome
+      description: >-
+        Receives a versioned outcome emitted by the configured Loxep companion
+        connection. Create the connection under Settings → Loxep connections;
+        the bearer token is revealed once and is scoped to that connection.
+        Accepted events are retained as raw provenance and can be retried
+        safely with the same eventId.
+      operationId: receiveLoxepOutcome
+      security:
+        - loxepCallbackToken: []
+      parameters:
+        - name: connectionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoxepOutcomeEvent' }
+      responses:
+        '202':
+          description: Event recorded, or an identical retry was already recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [received, duplicate]
+                properties:
+                  received: { const: true }
+                  duplicate: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: The eventId was already used for a different payload.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        '429':
+          description: The per-connection webhook rate limit was exceeded.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
 components:
   securitySchemes:
     researchToken:
       type: http
       scheme: bearer
       description: Revocable research:write token issued under Settings → Research API tokens.
+    loxepCallbackToken:
+      type: http
+      scheme: bearer
+      description: Reveal-once callback token issued under Settings → Loxep connections.
   responses:
     BadRequest:
       description: Malformed or non-importable research result.
@@ -236,3 +289,33 @@ components:
         resultId: { type: string, minLength: 1 }
         completedAt: { type: string, format: date-time }
         records: { type: array, minItems: 1, items: { $ref: '#/components/schemas/ResearchRecord' } }
+    LoxepOutcomeEvent:
+      type: object
+      additionalProperties: false
+      required: [schema, eventId, occurredAt, eventType, source, loxep, details]
+      properties:
+        schema: { const: 'loxep.hoardcore.outcome.v1' }
+        eventId: { type: string, format: uuid }
+        occurredAt: { type: string, format: date-time }
+        eventType:
+          type: string
+          enum: [acquisition.created, inventory.received, listing.active, order.sold, order.refunded, opportunity.dismissed]
+        source:
+          type: object
+          additionalProperties: false
+          required: [listingId, eventId]
+          properties:
+            listingId: { type: string, format: uuid }
+            eventId: { type: string, format: uuid, nullable: true }
+        loxep:
+          type: object
+          additionalProperties: false
+          required: [connectionId, resourceType, resourceId, url]
+          properties:
+            connectionId: { type: string, format: uuid }
+            resourceType: { type: string, minLength: 1, maxLength: 100 }
+            resourceId: { type: string, minLength: 1, maxLength: 200 }
+            url: { type: string, format: uri, nullable: true }
+        details:
+          type: object
+          additionalProperties: true

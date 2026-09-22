@@ -18,10 +18,10 @@
     <main class="wrap api-page" id="main">
       <p class="eyebrow">Current HTTP surface</p>
       <h1>API reference</h1>
-      <p class="api-lede">Hoardcore has one public, agent-facing write endpoint today. The rest of the application uses authenticated TanStack Start server functions, which are not a stable external API. This page describes what is implemented, not a proposed API.</p>
+      <p class="api-lede">Hoardcore has one public, agent-facing write endpoint plus a bearer-authenticated webhook for a configured Loxep companion. The rest of the application uses authenticated TanStack Start server functions, which are not a stable external API. This page describes what is implemented, not a proposed API.</p>
       <p class="api-spec-link"><a class="button secondary" href="/openapi.yaml" type="application/yaml">View OpenAPI 3.1 specification →</a><span>The spec describes an operator-hosted app API; hoardcore.com hosts documentation only.</span></p>
 
-      <nav class="api-toc" aria-label="On this page"><a href="#research">Research import</a><a href="#contract">Result contract</a><a href="#other">Other endpoints</a><a href="#limits">Boundaries</a></nav>
+      <nav class="api-toc" aria-label="On this page"><a href="#research">Research import</a><a href="#contract">Result contract</a><a href="#loxep">Loxep companion webhook</a><a href="#other">Other endpoints</a><a href="#limits">Boundaries</a></nav>
 
       <section class="api-section" id="research">
         <p class="eyebrow">Agent endpoint</p><h2><code>POST /api/research/import</code></h2>
@@ -32,6 +32,13 @@
   -H 'Content-Type: application/json' \
   --data-binary @research-result.json</code></pre>
         <p>The JSON file must wrap the result as <code>{ "result": { ...ResearchResult } }</code>. A valid response contains <code>id</code>, <code>status</code>, and <code>comparableCount</code>; an identical repeated submission may also return <code>idempotent: true</code>. Missing, revoked, expired, or insufficient tokens receive <code>401</code>. Oversize bodies receive <code>413</code>; malformed or non-importable results receive <code>400</code>.</p>
+      </section>
+
+      <section class="api-section" id="loxep">
+        <p class="eyebrow">Companion endpoint</p><h2><code>POST /api/v1/hooks/loxep/{connectionId}</code></h2>
+        <p>Use <strong>Settings → Loxep connections</strong> to create a connection. Hoardcore encrypts the outbound Loxep ingest token and reveals the callback token exactly once. Paste the callback URL and token into the matching Loxep source configuration if lifecycle outcomes should be sent back later.</p>
+        <div class="api-facts"><div><span>Authentication</span><strong>Bearer callback token</strong></div><div><span>Content type</span><strong>application/json</strong></div><div><span>Maximum body</span><strong>256 KiB</strong></div><div><span>Success</span><strong>202 Accepted</strong></div></div>
+        <p>Loxep outcomes use the versioned <code>loxep.hoardcore.outcome.v1</code> envelope. Repeating the same <code>eventId</code> with the same payload is acknowledged as a duplicate; reusing it with different content receives <code>409</code>. Missing or wrong credentials receive <code>401</code>, invalid payloads receive <code>400</code>, and oversized or rate-limited requests receive <code>413</code> or <code>429</code>.</p>
       </section>
 
       <section class="api-section" id="contract">
@@ -65,7 +72,7 @@
         <div class="api-route"><code>/api/auth/*</code><p>Authentication routes handled by Better Auth. These are provider/session plumbing, not a Hoardcore agent API; use the configured login flow rather than scripting them.</p></div>
       </section>
 
-      <section class="api-section" id="limits"><p class="eyebrow">Important boundary</p><h2>What is not exposed</h2><p>There is no stable public API yet for listing search, source management, collection runs, packet creation, watchlists, or alert settings. Use the authenticated app UI for those workflows. A research token cannot access media or general app data, and an ntfy publish token is a separate deployment secret—not a Hoardcore research token.</p></section>
+      <section class="api-section" id="limits"><p class="eyebrow">Important boundary</p><h2>What is not exposed</h2><p>There is no stable public API yet for listing search, source management, collection runs, packet creation, watchlists, or alert settings. Use the authenticated app UI for those workflows. A research token cannot access media or general app data, the Loxep callback token cannot publish opportunities, and an ntfy publish token is a separate deployment secret—not a Hoardcore research token.</p></section>
     </main>
     <footer><div class="wrap footer-inner"><a class="brand" href="/"><span class="brand-notch" aria-hidden="true"></span><span>HOARD<span>CORE</span></span></a><p>Inventory acquisition, with a memory.</p><span>MIT licensed · Self-hosted</span></div></footer>
   </body>

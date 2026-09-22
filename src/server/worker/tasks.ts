@@ -18,6 +18,7 @@ import { mediaCaptureRuns } from '~/server/db/schema/media'
 import { evaluateCollectionAlertsTask, deliverAlertsTask, type AlertTaskPayload, type AlertDeliveryTaskPayload } from '~/features/alerts/alerts.tasks'
 import { COLLECTION_DISABLED_MESSAGE } from '~/features/sources/collection-gate'
 import { nextCronRun } from '~/features/sources/source-schedule'
+import { deliverLoxepOpportunity } from '~/features/loxep/loxep.server'
 
 /** Payloads for the application-owned durable task names. */
 export interface HoardcoreTaskPayloads {
@@ -27,6 +28,7 @@ export interface HoardcoreTaskPayloads {
   'media.capture': { runId: string; after?: string; auto?: boolean }
   'alerts.evaluate': AlertTaskPayload
   'alerts.deliver': AlertDeliveryTaskPayload
+  'loxep.publish-opportunity': { deliveryId: string }
 }
 
 declare global {
@@ -393,6 +395,16 @@ export const mediaCaptureTask: Task<'media.capture'> = async (payload, helpers) 
   }
 }
 
+export const loxepPublishOpportunityTask: Task<'loxep.publish-opportunity'> = async (payload, helpers) => {
+  try {
+    await deliverLoxepOpportunity(getDatabase(), payload.deliveryId)
+    helpers.logger.info(`loxep.publish-opportunity: ${payload.deliveryId} finished`)
+  } catch (error) {
+    helpers.logger.info(`loxep.publish-opportunity: ${payload.deliveryId} will be retried: ${error instanceof Error ? error.message : String(error)}`)
+    throw error
+  }
+}
+
 /** The only task registry passed to Graphile Worker. Add source-independent tasks here. */
 export const taskRegistry = {
   'fixture.echo': fixtureEchoTask,
@@ -401,4 +413,5 @@ export const taskRegistry = {
   'media.capture': mediaCaptureTask,
   'alerts.evaluate': evaluateCollectionAlertsTask,
   'alerts.deliver': deliverAlertsTask,
+  'loxep.publish-opportunity': loxepPublishOpportunityTask,
 } satisfies TaskList

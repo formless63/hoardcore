@@ -17,6 +17,11 @@ const serverConfigSchema = z.object({
   DATABASE_URL: postgresUrlSchema,
   BETTER_AUTH_SECRET: z.string().min(32, 'must be at least 32 characters').optional(),
   BETTER_AUTH_URL: z.url().optional(),
+  // Optional separate root for UI-managed companion credentials. When unset,
+  // the authenticated installation secret is used with a Hoardcore-specific
+  // derivation so existing deployments can enable the UI without another
+  // required environment variable.
+  INTEGRATION_ENCRYPTION_KEY: optionalEnvironmentValue(z.string().min(32)),
   OIDC_ISSUER: optionalEnvironmentValue(z.url()),
   OIDC_CLIENT_ID: optionalEnvironmentValue(z.string().min(1)),
   OIDC_CLIENT_SECRET: optionalEnvironmentValue(z.string().min(1)),
