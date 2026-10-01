@@ -28,7 +28,7 @@ function AlertSettingsPage() {
   const saveView = useServerFn(saveSavedViewAlertPreference)
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setMessage('')
-    try { await save({ data: { enabled, endpoint, topic } }); await router.invalidate({ sync: true }); setMessage('Saved. Delivery remains queued until the application worker evaluates a new observation.') }
+    try { await save({ data: { enabled, endpoint, topic } }); await router.invalidate({ sync: true }); setMessage('Saved. The application worker will deliver eligible queued notifications.') }
     catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save notification settings') }
     finally { setBusy(false) }
   }
@@ -36,7 +36,7 @@ function AlertSettingsPage() {
     <div className="mb-3 flex items-center gap-3"><Link to="/settings" className="text-xs text-primary underline">← Settings</Link><h1 className="text-sm font-medium">Notifications</h1></div>
     <form className="max-w-xl rounded border border-border bg-card p-3 text-xs" onSubmit={(event) => void submit(event)}>
       <label className="flex items-center gap-2"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} /><span className="font-medium">Enable ntfy notifications</span></label>
-      <p className="mt-1 text-muted-foreground">Alerts are evaluated for your watched listings and saved listing views. Nothing is sent while this is disabled.</p>
+      <p className="mt-1 text-muted-foreground">Alerts cover your watched listings, saved listing views and subscribed source safety events. Configure source events in Sources → Response safety. Nothing is sent while this is disabled.</p>
       <label className="mt-4 block text-muted-foreground" htmlFor="ntfy-endpoint">Public HTTPS ntfy origin</label>
       <Input id="ntfy-endpoint" className="mt-1" value={endpoint} onChange={(event) => setEndpoint(event.target.value)} placeholder="https://ntfy.example.com" />
       <label className="mt-3 block text-muted-foreground" htmlFor="ntfy-topic">Topic</label>

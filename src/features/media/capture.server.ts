@@ -7,6 +7,7 @@ import { mediaCaptureRuns, listingMedia } from '~/server/db/schema/media'
 import { isAllowedShopifyMediaUrl, usesOperatorApprovedShopifyAccess } from '~/modules/shopify/media-policy'
 import { mediaCapturePolicySchema, type MediaCapturePolicy } from './media.schemas'
 import { getCaptureCandidate, listSourceMediaCandidates, mediaCandidateKey, persistListingMedia, reuseListingMedia } from './media.server'
+import { assertSourceOriginAvailable, readResponsePolicy, sourceOrigin, SourceSafetyStop, withSourceResponseSafety } from '~/features/sources/response-safety.server'
 
 const maxImageBytes = 10 * 1024 * 1024
 const acceptedImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'])
@@ -102,7 +103,7 @@ export function createMediaRobotsAccessPolicy(
         try {
           const response = await http(`${origin}/robots.txt`, { headers: { accept: 'text/plain', 'user-agent': userAgent }, redirect: 'manual', signal: AbortSignal.timeout(5_000) })
           return response.ok ? robotsParser(`${origin}/robots.txt`, await response.text()) : null
-        } catch { return null }
+        } catch (error) { if (error instanceof SourceSafetyStop) throw error; return null }
       })()
       cache.set(origin, check)
     }
@@ -128,6 +129,7 @@ export async function fetchMediaBytes(
     try {
       response = await http(url, { headers: { accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8', 'user-agent': policy.userAgent }, redirect: 'manual', signal: AbortSignal.timeout(15_000) })
     } catch (error) {
+      if (error instanceof SourceSafetyStop) { budget.stopped = true; throw error }
       if (retry >= policy.maxRetries) throw new MediaCaptureError(`Image request failed: ${error instanceof Error ? error.message : String(error)}`, 'retry_exhausted')
       retry += 1
       await wait(policy.minimumDelayMs * 2 ** retry)
@@ -273,8 +275,11 @@ export async function runMediaCapture(db: Database, runId: string, dependencies:
   const [source] = await db.select().from(catalogSources).where(eq(catalogSources.id, run.sourceId)).limit(1)
   if (!source) throw new Error(`Media capture source ${run.sourceId} was not found`)
   const policy = mediaCapturePolicySchema.parse({ enabled: true, requestLimit: run.requestLimit, ...dependencies.policy })
+  const safetyPolicy = await readResponsePolicy(db, source.id)
+  policy.concurrency = 1
+  policy.minimumDelayMs = Math.max(policy.minimumDelayMs, safetyPolicy.minimumDelaySeconds * 1000)
   const budget: MediaRequestBudget = { requests: 0, maxRequests: policy.requestLimit }
-  const http = dependencies.http ?? ((url: string, init: RequestInit) => fetch(url, init) as Promise<MediaHttpResponse>)
+  const http = withSourceResponseSafety(db, source, dependencies.http ?? ((url: string, init: RequestInit) => fetch(url, init) as Promise<MediaHttpResponse>))
   const accessPolicy = dependencies.accessPolicy ?? (source.moduleId === 'shopify' && usesOperatorApprovedShopifyAccess(source.config)
     ? async () => true
     : createMediaRobotsAccessPolicy(budget, http, policy.userAgent, policy.minimumDelayMs, dependencies.wait))
@@ -283,6 +288,8 @@ export async function runMediaCapture(db: Database, runId: string, dependencies:
   let after = dependencies.after
   let stopContinuation = false
   try {
+    if (!source.collectionEnabled) throw new SourceSafetyStop('Collection is paused for this source')
+    await assertSourceOriginAvailable(db, sourceOrigin(source))
     const candidates = (await listSourceMediaCandidates(db, source.id))
       .filter((candidate) => !after || mediaCandidateKey(candidate) > after)
       .slice(0, policy.requestLimit)
@@ -302,6 +309,7 @@ export async function runMediaCapture(db: Database, runId: string, dependencies:
       for (const [offset, outcome] of outcomes.entries()) {
         if (outcome.error) {
           error = outcome.error instanceof Error ? outcome.error.message : String(outcome.error)
+          if (outcome.error instanceof SourceSafetyStop) { stopContinuation = true; break }
           if (outcome.error instanceof MediaCaptureError) {
             if (outcome.error.kind === 'request_ceiling') { reachedCeiling = true; break }
             if (outcome.error.kind === 'persistent_rejection' || outcome.error.kind === 'retry_exhausted' || outcome.error.kind === 'access_denied') {

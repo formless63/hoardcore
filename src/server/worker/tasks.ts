@@ -15,10 +15,12 @@ import { runMediaCapture } from '~/features/media/capture.server'
 import { enqueueMediaCaptureBatch, listSourceMediaCandidates } from '~/features/media/media.server'
 import { getServerConfig } from '~/server/config.server'
 import { mediaCaptureRuns } from '~/server/db/schema/media'
-import { evaluateCollectionAlertsTask, deliverAlertsTask, type AlertTaskPayload, type AlertDeliveryTaskPayload } from '~/features/alerts/alerts.tasks'
+import { evaluateCollectionAlertsTask, deliverAlertsTask, alertDeliveryJobOptions, type AlertTaskPayload, type AlertDeliveryTaskPayload } from '~/features/alerts/alerts.tasks'
+import { notificationDeliveries, notificationSettings } from '~/server/db/schema/alerts'
 import { COLLECTION_DISABLED_MESSAGE } from '~/features/sources/collection-gate'
 import { nextCronRun } from '~/features/sources/source-schedule'
 import { deliverLoxepOpportunity } from '~/features/loxep/loxep.server'
+import { claimSourceScan, readResponsePolicy, recordSourceRecovery, recordResponseEvent, sourceOrigin, SourceSafetyStop, withSourceResponseSafety } from '~/features/sources/response-safety.server'
 
 /** Payloads for the application-owned durable task names. */
 export interface HoardcoreTaskPayloads {
@@ -124,6 +126,7 @@ export async function runCatalogCollection(
     await db.update(collectionRuns).set({ requestCount: String(requestCount) }).where(eq(collectionRuns.id, payload.runId))
   }
   try {
+    if (!runRecord.observedAt) await claimSourceScan(db, source, true)
     if (source.moduleId !== 'shopify') {
       throw new Error(`Collection module ${source.moduleId} is not implemented`)
     }
@@ -135,10 +138,12 @@ export async function runCatalogCollection(
       catalogUrl: normalizeShopifyCatalogUrl(persistedPolicy.catalogUrl).config.catalogUrl as string,
       maxRequests: runRecord.requestLimit,
     }
+    const safetyPolicy = await readResponsePolicy(db, source.id)
+    policy.minimumDelayMs = Math.max(policy.minimumDelayMs, safetyPolicy.minimumDelaySeconds * 1000)
     await log(persistedPolicy.robotsPolicy === 'operator_approved'
       ? 'Collection started with operator-approved access; robots.txt preflight skipped.'
       : 'Collection started. Checking source access policy.')
-    const http = dependencies.http ?? createSecureShopifyHttpClient({ resolver: dependencies.resolver, request: dependencies.request })
+    const http = withSourceResponseSafety(db, source, dependencies.http ?? createSecureShopifyHttpClient({ resolver: dependencies.resolver, request: dependencies.request }))
     const accessPolicy = dependencies.accessPolicy ?? (persistedPolicy.robotsPolicy === 'operator_approved'
       ? async () => true
       : createRobotsAccessPolicy(run, http, policy.userAgent, async (requestCount, status, failureCode) => {
@@ -197,6 +202,9 @@ export async function runCatalogCollection(
       },
     })
 
+    if (result.status === 'partial' && result.incomplete?.kind === 'invalid_page') {
+      await recordResponseEvent(db, source, sourceOrigin(source), 'invalid_response', null)
+    }
     if (result.status !== 'not_modified') {
       let records = result.records
       let evidencePayload: unknown = result.evidencePayload
@@ -255,7 +263,10 @@ export async function runCatalogCollection(
       minimumAllowedAt: null,
       retryAfterUntil: null,
     }).where(eq(collectionRuns.id, payload.runId))
-    await db.update(catalogSources).set({ status: 'active', updatedAt: new Date() }).where(eq(catalogSources.id, source.id))
+    await db.update(catalogSources).set({ status: result.status === 'partial' && result.incomplete?.kind === 'invalid_page' ? 'error' : 'active', updatedAt: new Date() }).where(eq(catalogSources.id, source.id))
+    if ((result.status === 'ok' || result.status === 'not_modified') && await recordSourceRecovery(db, source) && helpers.addJob) {
+      await helpers.addJob('alerts.deliver', { trigger: 'collection' }, { maxAttempts: 1 })
+    }
     await log(result.status === 'partial'
       ? result.incomplete?.kind === 'invalid_page'
         ? `Page ${result.incomplete.page} failed validation (${result.incomplete.detail}). Saved ${result.productCount} products from earlier pages as a partial snapshot.`
@@ -274,6 +285,20 @@ export async function runCatalogCollection(
     helpers.logger.info(`catalog.collect: ${source.id} completed`)
   } catch (error) {
     const requestCount = run.requests
+    if (requestCount > 0 && !(error instanceof SourceSafetyStop) && error instanceof Error) {
+      const invalidPayload = error.name === 'ZodError' || error instanceof SyntaxError || error instanceof ShopifyCollectionTransportError && error.kind === 'invalid_response'
+      const timedOut = error.name === 'TimeoutError' || error.name === 'AbortError' || error instanceof ShopifyCollectionTransportError && error.kind === 'timeout'
+      if (invalidPayload || timedOut) {
+        error = new SourceSafetyStop(await recordResponseEvent(db, source, sourceOrigin(source), timedOut ? 'timeout' : 'invalid_response', null))
+      }
+    }
+    if (error instanceof SourceSafetyStop) {
+      await db.update(collectionRuns).set({ status: 'failed', requestCount: String(requestCount), error: error.message, completedAt: new Date(), nextAllowedAt: null }).where(eq(collectionRuns.id, payload.runId))
+      await db.update(catalogSources).set({ status: 'error', updatedAt: new Date() }).where(eq(catalogSources.id, source.id))
+      await log(`Collection stopped by response safety: ${error.message}`)
+      if (helpers.addJob) await helpers.addJob('alerts.deliver', { trigger: 'collection' }, { maxAttempts: 1 })
+      return
+    }
     if (error instanceof CollectionPagePause && helpers.addJob) {
       await helpers.addJob('catalog.collect', payload, { runAt: error.until, maxAttempts: 1, jobKey: `catalog-resume-${payload.runId}` })
       await db.update(collectionRuns).set({ status: 'queued', requestCount: String(requestCount), nextAllowedAt: error.until, error: `Waiting between pages until ${error.until.toISOString()}.` }).where(eq(collectionRuns.id, payload.runId))
@@ -330,6 +355,13 @@ export const catalogCollectTask: Task<'catalog.collect'> = async (payload, helpe
 
 /** Per-source schedules are inert until explicitly enabled by an operator. */
 export const catalogScheduleTask: Task<'catalog_schedule'> = async (_payload, helpers) => {
+  // Recover queued deliveries even if the process stopped between persisting
+  // a source event and enqueuing its delivery job. This also runs while scanning is disabled.
+  const [readyNotification] = await getDatabase().select({ id: notificationDeliveries.id }).from(notificationDeliveries)
+    .innerJoin(notificationSettings, eq(notificationSettings.userId, notificationDeliveries.userId))
+    .where(and(eq(notificationDeliveries.status, 'queued'), eq(notificationSettings.enabled, true),
+      or(isNull(notificationDeliveries.nextAttemptAt), lte(notificationDeliveries.nextAttemptAt, new Date())))).limit(1)
+  if (readyNotification) await helpers.addJob('alerts.deliver', { trigger: 'retry' }, alertDeliveryJobOptions(new Date()))
   if (getServerConfig().CATALOG_COLLECTION_ENABLED !== 'true') return
   const db = getDatabase()
   const now = new Date()
@@ -355,6 +387,8 @@ export const catalogScheduleTask: Task<'catalog_schedule'> = async (_payload, he
           : eq(catalogSources.scheduleHours, source.scheduleHours!),
       )).returning({ id: catalogSources.id })
       if (!claimed.length) continue
+      try { await claimSourceScan(db, source) }
+      catch (error) { if (error instanceof SourceSafetyStop) continue; throw error }
       const [run] = await db.insert(collectionRuns).values({ sourceId: source.id, requestLimit: source.scheduleRequestLimit }).onConflictDoNothing().returning({ id: collectionRuns.id })
       if (run) {
         await db.insert(collectionRunEvents).values({ runId: run.id, message: `Scheduled collection queued with a ceiling of ${source.scheduleRequestLimit} requests.` })
@@ -379,6 +413,7 @@ export const mediaCaptureTask: Task<'media.capture'> = async (payload, helpers) 
       policy: { concurrency: config.MEDIA_CAPTURE_CONCURRENCY, minimumDelayMs: config.MEDIA_CAPTURE_MINIMUM_DELAY_MS },
     })
     helpers.logger.info(`media.capture: ${payload.runId} finished`)
+    if (outcome.stopContinuation) await helpers.addJob('alerts.deliver', { trigger: 'collection' }, { maxAttempts: 1 })
     if (payload.auto && outcome.hasMore && !outcome.stopContinuation) {
       try {
         const [completed] = await db.select({ sourceId: mediaCaptureRuns.sourceId }).from(mediaCaptureRuns).where(eq(mediaCaptureRuns.id, payload.runId)).limit(1)
@@ -392,6 +427,7 @@ export const mediaCaptureTask: Task<'media.capture'> = async (payload, helpers) 
     const message = error instanceof Error ? error.message : String(error)
     await getDatabase().update(mediaCaptureRuns).set({ status: 'failed', error: message, completedAt: new Date() }).where(eq(mediaCaptureRuns.id, payload.runId))
     helpers.logger.error(`media.capture: ${payload.runId} stopped: ${message}`)
+    if (error instanceof SourceSafetyStop) await helpers.addJob('alerts.deliver', { trigger: 'collection' }, { maxAttempts: 1 })
   }
 }
 

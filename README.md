@@ -27,6 +27,14 @@ Operator acceptance of each deployment remains important.
 - Per-source collection enable/pause and opt-in five-field cron schedules with explicit IANA
   timezones and bounded request ceilings. New sources default to manual-only; the deployment-wide
   collection gate still applies.
+- UI-managed response safety on each source: request spacing, minimum scan intervals, immediate
+  stops on throttling/access failures, configurable breaks and review pauses, escalating 429
+  cooldowns, operator breaks, event history, and opt-in ntfy notifications. Cooldowns are durable
+  and shared by origin across catalog, stock supplements and photo capture. A one-request probe
+  tool respects required preflights and all safety gates. Defaults use ten
+  seconds between requests, 24 hours between scans, and 24/72/168-hour breaks after repeated
+  429s; the third rate-limit strike requires operator review. Longer Retry-After values are
+  always honored, and existing breaks cannot be shortened from the UI.
 - Current listings tracker with source/product/variant detail, observation history, and retained
   evidence. The listings workbench has URL-persisted filters/sort, saved views, and source-specific
   category-group corrections. Listing detail includes bounded, paginated observation history,

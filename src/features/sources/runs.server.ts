@@ -4,6 +4,7 @@ import { catalogSources, collectionRunEvents, collectionRuns } from '~/server/db
 import { enqueueJob } from '~/server/worker/index.server'
 import { getServerConfig } from '~/server/config.server'
 import { assertCatalogCollectionEnabled } from './collection-gate'
+import { assertSourceOriginAvailable, claimSourceScan, sourceOrigin } from './response-safety.server'
 
 function hasPostgresCode(error: unknown, code: string): boolean {
   let current = error
@@ -42,9 +43,10 @@ export async function getCollectionRunFromDatabase(runId: string) {
 
 export async function enqueueCatalogCollectionInDatabase(sourceId: string, requestLimit: number, interPageWaitMs = 0) {
   assertCatalogCollectionEnabled(getServerConfig().CATALOG_COLLECTION_ENABLED === 'true')
-  const [source] = await getDatabase().select({ collectionEnabled: catalogSources.collectionEnabled }).from(catalogSources).where(eq(catalogSources.id, sourceId))
+  const [source] = await getDatabase().select().from(catalogSources).where(eq(catalogSources.id, sourceId))
   if (!source) throw new Error('That catalog source is no longer available')
   if (!source.collectionEnabled) throw new Error('Collection is paused for this source')
+  await claimSourceScan(getDatabase(), source)
   let run: typeof collectionRuns.$inferSelect | undefined
   try {
     const insertedRuns = await getDatabase()
@@ -81,8 +83,9 @@ export async function continueDeferredCollectionInDatabase(runId: string) {
   const now = new Date()
   const [run] = await db.select().from(collectionRuns).where(eq(collectionRuns.id, runId))
   if (!run || run.status !== 'queued' || !run.nextAllowedAt) throw new Error('This collection is not waiting for continuation')
-  const [source] = await db.select({ collectionEnabled: catalogSources.collectionEnabled }).from(catalogSources).where(eq(catalogSources.id, run.sourceId))
+  const [source] = await db.select().from(catalogSources).where(eq(catalogSources.id, run.sourceId))
   if (!source?.collectionEnabled) throw new Error('Collection is paused for this source')
+  await assertSourceOriginAvailable(db, sourceOrigin(source))
   const hardGate = Math.max(run.minimumAllowedAt?.getTime() ?? 0, run.retryAfterUntil?.getTime() ?? 0, now.getTime())
   if (run.nextAllowedAt.getTime() <= hardGate) throw new Error('This wait is required by minimum pacing or the source Retry-After and cannot be shortened')
   const runAt = new Date(hardGate)

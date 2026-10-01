@@ -2,7 +2,7 @@ import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { normalizeShopifyCatalogUrl } from '~/modules/shopify/source-config'
 import { closeDatabase, getDatabase } from '../db/index.server'
-import { catalogSources, collectionRunEvents, collectionRuns, sourceEvidence, sourceListingCurrent, sourceListingObservations, sourceListings } from '../db/schema'
+import { catalogSources, collectionRunEvents, collectionRuns, sourceEvidence, sourceListingCurrent, sourceListingObservations, sourceListings, sourceOriginSafety } from '../db/schema'
 import { runCatalogCollection } from './tasks'
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL
@@ -236,7 +236,7 @@ describe.skipIf(!testDatabaseUrl)('catalog collection worker safety', () => {
     expect(http.mock.calls[0]?.[1].headers).not.toHaveProperty('if-none-match')
   })
 
-  it('durably defers a long source Retry-After instead of holding the worker', async () => {
+  it('stops immediately on a 429 and persists a cooldown without scheduling a retry', async () => {
     const normalized = normalizeShopifyCatalogUrl(`https://fixture-${crypto.randomUUID()}.invalid/collections/sale`)
     const [source] = await getDatabase().insert(catalogSources).values({
       moduleId: 'shopify', displayName: 'Retry-after fixture', sourceKey: normalized.sourceKey, config: normalized.config,
@@ -253,11 +253,12 @@ describe.skipIf(!testDatabaseUrl)('catalog collection worker safety', () => {
     )
 
     expect(http).toHaveBeenCalledTimes(1)
-    expect(addJob).toHaveBeenCalledWith('catalog.collect', { sourceId, runId: run.id }, expect.objectContaining({
-      runAt: expect.any(Date), maxAttempts: 1,
-    }))
+    expect(addJob.mock.calls.some(call => call[0] === 'catalog.collect')).toBe(false)
     const [recorded] = await getDatabase().select().from(collectionRuns).where(eq(collectionRuns.id, run.id))
-    expect(recorded).toMatchObject({ status: 'queued', requestCount: '1' })
-    expect(recorded?.error).toContain('Deferred until')
+    expect(recorded).toMatchObject({ status: 'failed', requestCount: '1' })
+    expect(recorded?.error).toContain('cooldown until')
+    const [gate] = await getDatabase().select().from(sourceOriginSafety).where(eq(sourceOriginSafety.origin, new URL(normalized.config.catalogUrl as string).origin))
+    expect(gate?.throttleStrikes).toBe(1)
+    expect(gate!.blockedUntil!.getTime() - Date.now()).toBeGreaterThan(23 * 3_600_000)
   })
 })

@@ -35,6 +35,10 @@ export const shopifySourceInputSchema = z.object({
 })
 
 export const shopifyModule = {
+  collectionOrigin(config: unknown) {
+    const parsed = shopifySourceConfigSchema.parse(config)
+    return new URL(normalizeShopifyCatalogUrl(parsed.catalogUrl).config.catalogUrl as string).origin
+  },
   manifest: {
     id: 'shopify',
     name: 'Shopify',

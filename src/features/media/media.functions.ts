@@ -8,6 +8,7 @@ import { mediaCaptureRuns } from '~/server/db/schema/media'
 import { createMediaCaptureRunSchema } from './media.schemas'
 import { enqueueMediaCaptureBatch } from './media.server'
 import { enqueueJob } from '~/server/worker/index.server'
+import { assertSourceOriginAvailable, sourceOrigin } from '~/features/sources/response-safety.server'
 
 export const getMediaCaptureAvailability = createServerFn({ method: 'GET' }).handler(async () => {
   await requireSession()
@@ -23,8 +24,10 @@ export const requestMediaCaptureRun = createServerFn({ method: 'POST' })
       throw new Error('Media capture is disabled by this deployment')
     }
     const db = getDatabase()
-    const [source] = await db.select({ id: catalogSources.id }).from(catalogSources).where(eq(catalogSources.id, data.sourceId)).limit(1)
+    const [source] = await db.select().from(catalogSources).where(eq(catalogSources.id, data.sourceId)).limit(1)
     if (!source) throw new Error('Source not found')
+    if (!source.collectionEnabled) throw new Error('Collection is paused for this source')
+    await assertSourceOriginAvailable(db, sourceOrigin(source))
     try {
       const run = await enqueueMediaCaptureBatch(db, source.id, data.requestLimit, (runId) =>
         enqueueJob('media.capture', { runId }, { maxAttempts: 1, priority: 10 }))

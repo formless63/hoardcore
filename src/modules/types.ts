@@ -77,4 +77,6 @@ export interface SourceRegistrationCapability<TInputSchema extends z.ZodType = z
 export interface HoardcoreSourceModule<TInputSchema extends z.ZodType = z.ZodType> {
   manifest: HoardcoreModuleManifest
   sourceRegistration: SourceRegistrationCapability<TInputSchema>
+  /** Origin shared by scopes that must respect the same collection access gate. */
+  collectionOrigin?: (config: unknown) => string
 }

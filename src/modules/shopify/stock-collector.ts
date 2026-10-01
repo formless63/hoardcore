@@ -1,5 +1,6 @@
 import type { NormalizedCatalogRecord } from '../types'
 import { z } from 'zod'
+import { SourceSafetyStop } from '~/lib/source-safety-error'
 import { enrichShopifyRecordsWithStock, parseShopifyStockCards, retainShopifyStockEvidenceHtml, type ShopifyStockCard } from './stock-cards'
 import { fetchShopifyStockPage, shopifyStockPageUrl, type ShopifyStockEvidencePage } from './stock-transport'
 import { ShopifyCollectionTransportError, type ShopifyCollectionRun, type ShopifyHttpClient, type ShopifyTransportEvent } from './transport'
@@ -43,6 +44,7 @@ export async function collectShopifyStockSupplement(input: {
     try {
       evidence = await fetchShopifyStockPage({ ...input, page })
     } catch (error) {
+      if (error instanceof SourceSafetyStop) throw error
       if (error instanceof ShopifyCollectionTransportError &&
         (error.kind === 'retry_after' || error.kind === 'deferred_backoff' && input.run.requests < input.run.maxRequests)) throw error
       incomplete = error instanceof Error ? error.message : String(error)

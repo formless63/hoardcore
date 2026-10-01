@@ -1,4 +1,5 @@
 import { normalizeShopifyCatalogUrl } from './source-config'
+import { SourceSafetyStop } from '~/lib/source-safety-error'
 
 export interface ShopifyHttpResponse {
   status: number
@@ -167,6 +168,7 @@ export async function fetchShopifyCollectionPage(
         throw new ShopifyCollectionTransportError('Collection access is disallowed by the source access policy', 'persistent_rejection')
       }
     } catch (error) {
+      if (error instanceof SourceSafetyStop) throw error
       if (error instanceof ShopifyCollectionTransportError) throw error
       throw new ShopifyCollectionTransportError('Collection access policy could not be determined', 'persistent_rejection')
     }

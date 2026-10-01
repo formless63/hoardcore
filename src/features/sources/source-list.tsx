@@ -10,6 +10,7 @@ import { SourceScheduleControl } from './source-schedule-control'
 import type { listMediaCaptureRuns } from '~/features/media/media.functions'
 import { SourceCatalogOptionsControl } from './source-catalog-options-control'
 import { formatScheduledDate } from './source-schedule'
+import { SourceSafetyControl, useSourceSafety } from './source-safety-control'
 
 const createdDateFormatter = new Intl.DateTimeFormat('en', {
   day: 'numeric',
@@ -62,16 +63,31 @@ export function SourceList({
               <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground"><span>Added {createdDateFormatter.format(new Date(source.createdAt))}</span>{source.currency ? <span>{source.currency}</span> : null}{source.stockCardsEnabled ? <span>Stock supplement on</span> : null}</div>
               {source.moduleId === 'shopify' ? <SourceCatalogOptionsControl source={source} onSaved={() => { void router.invalidate({ sync: true }) }} /> : null}
             </div>
-            <div className="min-w-0 space-y-2">
-              <section className="rounded border border-border/70 p-2" aria-label={`Collection controls for ${source.displayName}`}>
-                <SourceRunControl sourceId={source.id} run={latestRuns[source.id]} defaultRequestLimit={defaultRequestLimit} disabled={!source.collectionEnabled} />
-              </section>
-              <details className="rounded border border-border/70 p-2"><summary className="cursor-pointer text-xs font-medium">Schedule{source.nextRunAt ? ` · next ${formatScheduledDate(source.nextRunAt, source.scheduleTimezone)}` : ' · manual only'}</summary><div className="mt-2"><SourceScheduleControl source={source} /></div></details>
-              <details className="rounded border border-border/70 p-2"><summary className="cursor-pointer text-xs font-medium">Photo capture</summary><div className="mt-2"><MediaRunControl sourceId={source.id} enabled={mediaCaptureEnabled} run={latestMediaRuns[source.id]} /></div></details>
-            </div>
+            <SourceControls source={source} run={latestRuns[source.id]} mediaRun={latestMediaRuns[source.id]} defaultRequestLimit={defaultRequestLimit} mediaCaptureEnabled={mediaCaptureEnabled} />
           </article>
         </li>
       ))}
     </ul>
   )
+}
+
+function SourceControls({ source, run, mediaRun, defaultRequestLimit, mediaCaptureEnabled }: {
+  source: CatalogSourceSummary
+  run: Parameters<typeof SourceRunControl>[0]['run']
+  mediaRun: Parameters<typeof MediaRunControl>[0]['run']
+  defaultRequestLimit: number
+  mediaCaptureEnabled: boolean
+}) {
+  const query = useSourceSafety(source.id)
+  const state = query.data?.state
+  const blocked = !source.collectionEnabled || !query.data?.collectionEnabled || Boolean(state?.paused || state?.blockedUntil && state.blockedUntil > new Date())
+  const scanInterval = Boolean(state?.lastScanAt && query.data && state.lastScanAt.getTime() + query.data.policy.minimumScanHours * 3_600_000 > Date.now())
+  return <div className="min-w-0 space-y-2">
+    <SourceSafetyControl sourceId={source.id} query={query} />
+    <section className="rounded border border-border/70 p-2" aria-label={`Collection controls for ${source.displayName}`}>
+      <SourceRunControl sourceId={source.id} run={run} defaultRequestLimit={defaultRequestLimit} disabled={blocked || scanInterval} />
+    </section>
+    <details className="rounded border border-border/70 p-2"><summary className="cursor-pointer text-xs font-medium">Schedule{source.nextRunAt ? ` · next ${formatScheduledDate(source.nextRunAt, source.scheduleTimezone)}` : ' · manual only'}</summary><div className="mt-2"><SourceScheduleControl source={source} /></div></details>
+    <details className="rounded border border-border/70 p-2"><summary className="cursor-pointer text-xs font-medium">Photo capture</summary><div className="mt-2"><MediaRunControl sourceId={source.id} enabled={mediaCaptureEnabled} disabled={blocked} run={mediaRun} /></div></details>
+  </div>
 }
