@@ -3,6 +3,7 @@ import type { Database } from '~/server/db/db.server'
 import { catalogSources, notificationDeliveries, notificationSettings, sourceOriginSafety, sourceResponsePolicies, sourceResponseSubscriptions, sourceSafetyEvents } from '~/server/db/schema'
 import { classifyResponse, responseDecision, responseEventLabels, responsePolicySchema, type ResponseEventType, type ResponsePolicy } from './response-policy'
 import { getSourceModule } from '~/modules/registry'
+import { cooldownReleaseInputSchema } from './cooldown-release.schemas'
 
 import { SourceSafetyStop } from '~/lib/source-safety-error'
 export { SourceSafetyStop } from '~/lib/source-safety-error'
@@ -177,4 +178,24 @@ export async function setSourceSafetyBreakInDatabase(db: Database, userId: strin
     await tx.insert(sourceSafetyEvents).values({ sourceId: input.sourceId, origin, eventType: input.action === 'resume' ? 'operator_resume' : 'operator_break', message })
   })
   return readSourceSafety(db, input.sourceId, userId)
+}
+
+/** Explicit operator override; ordinary resume still waits for expiry. */
+export async function releaseSourceCooldownInDatabase(db: Database, userId: string, input: unknown) {
+  const data = cooldownReleaseInputSchema.parse(input)
+  const [source] = await db.select().from(catalogSources).where(eq(catalogSources.id, data.sourceId))
+  if (!source) throw new Error('Source not found')
+  const origin = sourceOrigin(source)
+  await db.transaction(async tx => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${origin}, 0))`)
+    const [prior] = await tx.select().from(sourceOriginSafety).where(eq(sourceOriginSafety.origin, origin))
+    if (!prior || !prior.blockedUntil && !prior.paused) throw new Error('There is no cooldown or review pause to release')
+    if ((prior.blockedUntil?.toISOString() ?? null) !== data.expectedBlockedUntil || prior.paused !== data.expectedPaused)
+      throw new Error('Source safety state changed. Refresh and confirm the current cooldown before releasing it.')
+    const paused = prior.paused && !data.resume
+    const message = `Operator ${userId} explicitly released the cooldown ending ${prior.blockedUntil?.toISOString() ?? 'without a deadline'}${data.resume && prior.paused ? ' and lifted the review pause' : paused ? '; review pause retained' : ''}. Reason: ${data.reason}. Strike history, request pacing, scan interval, and budgets retained. No scan queued.`
+    await tx.update(sourceOriginSafety).set({ blockedUntil: null, paused, reason: message }).where(eq(sourceOriginSafety.origin, origin))
+    await tx.insert(sourceSafetyEvents).values({ sourceId: source.id, origin, eventType: 'operator_release', message })
+  })
+  return readSourceSafety(db, source.id, userId)
 }

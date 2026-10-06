@@ -4,16 +4,18 @@ import { catalogSources, collectionRuns, mediaCaptureRuns, sourceRouting, source
 import { sourceOrigin } from './response-safety.server'
 import { decryptProxyPassword, encryptProxyPassword } from './source-routing-crypto.server'
 import { proxyEndpointSchema, sourceRoutingInputSchema, type SourceProxy, type SourceRoutingSummary } from './source-routing.schemas'
+import { sourceRequestHeadersSchema } from './request-headers'
+import { getSourceModule } from '~/modules/registry'
 
-function summarize(row?: typeof sourceRouting.$inferSelect): SourceRoutingSummary {
-  return { transport: row?.transport ?? 'http', mode: row?.mode ?? 'direct', endpoint: row?.endpoint ?? '', username: row?.username ?? '', hasPassword: Boolean(row?.encryptedPassword) }
+function summarize(source: typeof catalogSources.$inferSelect, row?: typeof sourceRouting.$inferSelect): SourceRoutingSummary {
+  return { requestHeaders: sourceRequestHeadersSchema.parse(row?.requestHeaders ?? {}), defaultHeaders: getSourceModule(source.moduleId)?.collectionHeaders?.(source.config) ?? {}, transport: row?.transport ?? 'http', mode: row?.mode ?? 'direct', endpoint: row?.endpoint ?? '', username: row?.username ?? '', hasPassword: Boolean(row?.encryptedPassword) }
 }
 
 export async function readSourceRouting(db: Database, sourceId: string) {
-  const [source] = await db.select({ id: catalogSources.id }).from(catalogSources).where(eq(catalogSources.id, sourceId))
+  const [source] = await db.select().from(catalogSources).where(eq(catalogSources.id, sourceId))
   if (!source) throw new Error('Source not found')
   const [row] = await db.select().from(sourceRouting).where(eq(sourceRouting.sourceId, sourceId))
-  return summarize(row)
+  return summarize(source, row)
 }
 
 export async function readSourceProxy(db: Database, sourceId: string): Promise<SourceProxy | undefined> {
@@ -41,11 +43,13 @@ export async function saveSourceRoutingInDatabase(db: Database, input: unknown) 
       throw new Error('Re-enter or explicitly clear the password when changing proxy address or username')
     const encryptedPassword = data.mode === 'direct' || data.clearPassword ? null
       : data.password ? encryptProxyPassword(data.password, data.sourceId) : prior?.encryptedPassword ?? null
-    const values = { transport: data.transport ?? prior?.transport ?? 'http', mode: data.mode, endpoint, username: data.mode === 'direct' ? '' : data.username, encryptedPassword, updatedAt: new Date() }
+    const values = { requestHeaders: data.requestHeaders ?? prior?.requestHeaders ?? {}, transport: data.transport ?? prior?.transport ?? 'http', mode: data.mode, endpoint, username: data.mode === 'direct' ? '' : data.username, encryptedPassword, updatedAt: new Date() }
     const [row] = await tx.insert(sourceRouting).values({ sourceId: data.sourceId, ...values })
       .onConflictDoUpdate({ target: sourceRouting.sourceId, set: values }).returning()
     await tx.insert(sourceSafetyEvents).values({ sourceId: data.sourceId, origin: sourceOrigin(source), eventType: 'routing_changed',
       message: `Operator selected ${values.transport === 'browser' ? 'Chromium' : 'HTTP'} catalog transport with ${data.mode === 'http_proxy' ? 'HTTP proxy (no direct fallback)' : 'direct routing'}. Cooldowns and request budgets unchanged.` })
-    return summarize(row)
+    if (data.requestHeaders !== undefined) await tx.insert(sourceSafetyEvents).values({ sourceId: data.sourceId, origin: sourceOrigin(source), eventType: 'request_headers_changed',
+      message: `Operator saved catalog header overrides: ${Object.keys(values.requestHeaders).join(', ') || 'none (transport/module defaults)'}. Header values omitted from audit. Cooldowns and request budgets unchanged.` })
+    return summarize(source, row)
   })
 }

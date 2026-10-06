@@ -4,7 +4,8 @@ import { useServerFn } from '@tanstack/react-start'
 import { Link, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { Button } from '~/components/ui/button'
-import { getSourceSafety, saveSourceSafety, setSourceSafetyBreak, requestSourceSafetyProbe } from './response-safety.functions'
+import { getSourceSafety, saveSourceSafety, setSourceSafetyBreak, requestSourceSafetyProbe, releaseSourceCooldown } from './response-safety.functions'
+import { cooldownReleaseInputSchema } from './cooldown-release.schemas'
 import { responseEventLabels, responseEventTypes, responsePolicySchema, type ResponsePolicy } from './response-policy'
 
 type Safety = Awaited<ReturnType<typeof getSourceSafety>>
@@ -33,11 +34,26 @@ function SafetyEditor({ sourceId, safety }: { sourceId: string; safety: Safety }
   const save = useServerFn(saveSourceSafety)
   const changeBreak = useServerFn(setSourceSafetyBreak)
   const probe = useServerFn(requestSourceSafetyProbe)
+  const release = useServerFn(releaseSourceCooldown)
   const router = useRouter()
   const client = useQueryClient()
   const [message, setMessage] = useState('')
   const [breakHours, setBreakHours] = useState(72)
-  const refresh = async () => { await client.invalidateQueries({ queryKey: ['source-safety', sourceId] }); await router.invalidate({ sync: true }) }
+  const [releaseTarget, setReleaseTarget] = useState<{ expectedBlockedUntil: string | null; expectedPaused: boolean } | null>(null)
+  const [releaseMessage, setReleaseMessage] = useState('')
+  const refresh = async () => { await client.invalidateQueries({ queryKey: ['source-safety'] }); await router.invalidate({ sync: true }) }
+  const releaseForm = useForm({ defaultValues: { reason: '', resume: true, confirmed: false }, onSubmit: async ({ value }) => {
+    setReleaseMessage('')
+    const parsed = cooldownReleaseInputSchema.safeParse({ sourceId, ...value, ...releaseTarget })
+    if (!parsed.success) { setReleaseMessage(parsed.error.issues.map(issue => issue.message).join('; ')); return }
+    try {
+      await release({ data: parsed.data })
+      setReleaseTarget(null)
+      releaseForm.reset()
+      await refresh()
+      setReleaseMessage('Cooldown released. No scan was queued; pacing, scan interval, and strike history are unchanged.')
+    } catch (error) { setReleaseMessage(error instanceof Error ? error.message : 'Could not release cooldown'); await refresh() }
+  } })
   const mutation = useMutation({ mutationFn: async (action: 'break' | 'pause' | 'resume' | 'probe') => {
     if (action === 'probe') await probe({ data: { sourceId } })
     else await changeBreak({ data: { sourceId, action, hours: breakHours } })
@@ -76,10 +92,19 @@ function SafetyEditor({ sourceId, safety }: { sourceId: string; safety: Safety }
       <Button size="small" disabled={mutation.isPending} onClick={() => mutation.mutate('break')}>Take / extend break</Button>
       <Button size="small" disabled={mutation.isPending} onClick={() => mutation.mutate('pause')}>Pause for review</Button>
       <Button size="small" disabled={mutation.isPending || requiredBreak || !safety.state?.paused} onClick={() => mutation.mutate('resume')}>Resume after review</Button>
+      <Button size="small" disabled={mutation.isPending || !safety.state?.blockedUntil && !safety.state?.paused} onClick={() => { releaseForm.reset(); setReleaseMessage(''); setReleaseTarget({ expectedBlockedUntil: safety.state?.blockedUntil?.toISOString() ?? null, expectedPaused: safety.state?.paused ?? false }) }}>Release cooldown now…</Button>
       <Button size="small" disabled={mutation.isPending || !safety.collectionEnabled || requiredBreak || scanInterval || safety.state?.paused} onClick={() => mutation.mutate('probe')}>Queue one-request probe</Button>
     </div>
     {mutation.error ? <p role="alert" className="text-destructive">{mutation.error.message}</p> : null}
-    <p className="text-muted-foreground">Existing breaks cannot be shortened. Resume unlocks an operator pause only after the required break ends. A probe has a one-request ceiling including any required robots.txt preflight, and respects the minimum scan interval.</p>
+    {releaseTarget ? <form className="space-y-3 rounded border border-border p-3" onSubmit={event => { event.preventDefault(); void releaseForm.handleSubmit() }}>
+      <p>Release the cooldown for all collections on {safety.origin}{releaseTarget.expectedBlockedUntil ? ` before ${new Date(releaseTarget.expectedBlockedUntil).toLocaleString()}` : ''}. This overrides the recorded break, including any Retry-After delay. The action and your reason are recorded.</p>
+      <releaseForm.Field name="reason">{field => <label className="block">Reason<textarea className={inputClass} value={field.state.value} maxLength={500} minLength={3} required onChange={event => field.handleChange(event.target.value)} /></label>}</releaseForm.Field>
+      {releaseTarget.expectedPaused ? <releaseForm.Field name="resume">{field => <label className="flex items-center gap-2"><input type="checkbox" checked={field.state.value} onChange={event => field.handleChange(event.target.checked)} />Also lift the review pause</label>}</releaseForm.Field> : null}
+      <releaseForm.Field name="confirmed">{field => <label className="flex items-center gap-2"><input type="checkbox" checked={field.state.value} onChange={event => field.handleChange(event.target.checked)} required />I confirm this early release. Pacing, minimum scan interval, and strike history remain in effect.</label>}</releaseForm.Field>
+      <releaseForm.Subscribe selector={state => state.isSubmitting}>{busy => <div className="flex gap-2"><Button size="small" type="submit" disabled={busy}>{busy ? 'Releasing…' : 'Confirm release'}</Button><Button size="small" type="button" disabled={busy} onClick={() => setReleaseTarget(null)}>Cancel</Button></div>}</releaseForm.Subscribe>
+    </form> : null}
+    {releaseMessage ? <p role="status">{releaseMessage}</p> : null}
+    <p className="text-muted-foreground">Take / extend break never shortens a break. Resume waits for expiry; Release cooldown now is the explicit audited override. Releasing does not queue a scan or change pacing, minimum scan interval, request budgets, or strikes. A probe has a one-request ceiling including any required robots.txt preflight.</p>
     <details><summary className="cursor-pointer">Recent safety events</summary><ul className="mt-2 space-y-2">{safety.events.map(event => <li key={event.id}><time>{event.createdAt.toLocaleString()}</time> · {event.message}</li>)}</ul>{!safety.events.length ? <p className="mt-2 text-muted-foreground">No safety events recorded.</p> : null}</details>
   </div>
 }

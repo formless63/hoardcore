@@ -73,4 +73,13 @@ describe('browser source transport', () => {
     expect(abort).toHaveBeenCalledTimes(2)
     expect(continuation).toHaveBeenCalledWith({ headers: { accept: 'browser-native' } })
   })
+  it('applies UI headers on top of native navigation headers without losing cache validators', async () => {
+    const mock = fixture(200)
+    const http = createBrowserSourceHttpClient(undefined, async () => [{ address: '93.184.216.34', family: 4 }], { 'user-agent': 'operator-browser', accept: 'application/json', 'accept-language': 'en-US' })
+    await http('https://catalog.example.test/', { headers: { 'user-agent': 'module-default', 'if-none-match': 'fixture-etag' } })
+    const continuation = vi.fn()
+    await mock.context.route.mock.calls[0]![1]({ request: () => ({ url: () => 'https://catalog.example.test/', isNavigationRequest: () => true, method: () => 'GET', allHeaders: async () => ({ accept: 'browser-native', 'sec-fetch-mode': 'navigate' }) }), continue: continuation })
+    expect(continuation).toHaveBeenCalledWith({ headers: { accept: 'application/json', 'accept-language': 'en-US', 'user-agent': 'operator-browser', 'if-none-match': 'fixture-etag', 'sec-fetch-mode': 'navigate' } })
+    expect(mock.newContext).toHaveBeenCalledWith(expect.objectContaining({ userAgent: 'operator-browser' }))
+  })
 })

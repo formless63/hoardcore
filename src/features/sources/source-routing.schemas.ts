@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { sourceRequestHeadersSchema, type SourceRequestHeaders } from './request-headers'
 
 export const proxyEndpointSchema = z.string().trim().max(2048).refine(value => {
   try {
@@ -12,6 +13,7 @@ export const sourceRoutingInputSchema = z.object({
   sourceId: z.uuid(),
   mode: z.enum(['direct', 'http_proxy']),
   transport: z.enum(['http', 'browser']).optional(),
+  requestHeaders: sourceRequestHeadersSchema.optional(),
   endpoint: z.string().trim().max(2048).default(''),
   username: z.string().max(256).refine(value => !/[\r\n:]/u.test(value), 'Proxy username cannot contain a colon or line break').default(''),
   password: z.string().max(4096).default(''),
@@ -24,6 +26,8 @@ export const sourceRoutingInputSchema = z.object({
 })
 
 export interface SourceRoutingSummary {
+  requestHeaders: SourceRequestHeaders
+  defaultHeaders: Readonly<Record<string, string>>
   transport: 'http' | 'browser'
   mode: 'direct' | 'http_proxy'
   endpoint: string

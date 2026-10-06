@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { eq, inArray } from 'drizzle-orm'
 import { closeDatabase, getDatabase } from '~/server/db/index.server'
 import { catalogSources, notificationDeliveries, notificationSettings, sourceOriginSafety, sourceResponseSubscriptions, sourceSafetyEvents, user } from '~/server/db/schema'
-import { assertSourceOriginAvailable, claimSourceScan, readSourceSafety, recordSourceRecovery, saveSourceSafetyInDatabase, setSourceSafetyBreakInDatabase, withSourceResponseSafety } from './response-safety.server'
+import { assertSourceOriginAvailable, claimSourceScan, readSourceSafety, recordSourceRecovery, saveSourceSafetyInDatabase, setSourceSafetyBreakInDatabase, withSourceResponseSafety, releaseSourceCooldownInDatabase } from './response-safety.server'
 import { defaultResponsePolicy } from './response-policy'
 
 if (process.env.TEST_DATABASE_URL) process.env.DATABASE_URL = process.env.TEST_DATABASE_URL
@@ -91,6 +91,24 @@ databaseSuite('durable source response safety', () => {
     const resumed = await setSourceSafetyBreakInDatabase(db(), userId, { sourceId: source.id, action: 'resume', hours: 1 })
     expect(resumed.state).toMatchObject({ paused: false, throttleStrikes: 3 })
     await expect(assertSourceOriginAvailable(db(), origin)).resolves.toBeDefined()
+  })
+  it('allows confirmed early release, preserves all history/timing, and optionally retains the pause', async () => {
+    const blockedUntil = new Date(Date.now() + 72 * 3_600_000)
+    const nextRequestAt = new Date(Date.now() + 60_000)
+    const lastScanAt = new Date()
+    await db().update(sourceOriginSafety).set({ blockedUntil, paused: true, throttleStrikes: 3, nextRequestAt, lastScanAt }).where(eq(sourceOriginSafety.origin, origin))
+    const input = { sourceId: source.id, confirmed: true, reason: 'Reviewed a successful alternate transport', expectedBlockedUntil: blockedUntil.toISOString(), expectedPaused: true, resume: false }
+    await expect(releaseSourceCooldownInDatabase(db(), userId, { ...input, confirmed: false })).rejects.toThrow()
+    await expect(releaseSourceCooldownInDatabase(db(), userId, { ...input, expectedBlockedUntil: new Date(0).toISOString() })).rejects.toThrow('state changed')
+    const before = (await readSourceSafety(db(), source.id, userId)).state!
+    const released = await releaseSourceCooldownInDatabase(db(), userId, input)
+    expect(released.state).toMatchObject({ blockedUntil: null, paused: true, throttleStrikes: 3, lastScanAt, nextRequestAt, lastEvent: before.lastEvent, lastEventAt: before.lastEventAt })
+    await expect(assertSourceOriginAvailable(db(), origin)).rejects.toThrow('paused')
+    const resumed = await releaseSourceCooldownInDatabase(db(), userId, { ...input, expectedBlockedUntil: null, resume: true })
+    expect(resumed.state).toMatchObject({ blockedUntil: null, paused: false, throttleStrikes: 3, lastScanAt, nextRequestAt })
+    await expect(assertSourceOriginAvailable(db(), origin)).resolves.toBeDefined()
+    await expect(claimSourceScan(db(), sibling, true)).rejects.toThrow('Minimum scan interval')
+    expect(resumed.events.some(event => event.eventType === 'operator_release' && event.message.includes(userId) && event.message.includes(input.reason))).toBe(true)
   })
   it('serializes simultaneous attempts so only the first sends traffic on rejection', async () => {
     await db().update(sourceOriginSafety).set({ blockedUntil: null, paused: false, nextRequestAt: null }).where(eq(sourceOriginSafety.origin, origin))

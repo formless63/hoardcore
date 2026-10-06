@@ -34,7 +34,8 @@ Operator acceptance of each deployment remains important.
   tool respects required preflights and all safety gates. Defaults use ten
   seconds between requests, 24 hours between scans, and 24/72/168-hour breaks after repeated
   429s; the third rate-limit strike requires operator review. Longer Retry-After values are
-  always honored, and existing breaks cannot be shortened from the UI.
+  honored automatically; an explicit, confirmed, audited UI override can release
+  a cooldown early without erasing strike history or request/scan pacing.
 - Current listings tracker with source/product/variant detail, observation history, and retained
   evidence. The listings workbench has URL-persisted filters/sort, saved views, and source-specific
   category-group corrections. Listing detail includes bounded, paginated observation history,
@@ -89,7 +90,7 @@ pnpm check
 Database integration tests run when `TEST_DATABASE_URL` points at an already-migrated test
 database. CI provisions PostgreSQL 18, applies migrations, and enables these tests automatically.
 
-Source HTTP routing can be configured in Sources → Network routing. Each source
+Source HTTP routing and catalog headers can be configured in Sources → Network routing & request headers. Each source
 can use direct connections or an authenticated HTTP CONNECT proxy with an
 encrypted password. Proxy failures do not fall back to direct connections;
 changing routes does not reset source cooldowns or request budgets. The same UI
@@ -103,6 +104,13 @@ vendored in `deploy/browser-seccomp.json`. Keep that profile enabled when deploy
 the browser transport. See
 [shared VPN setup](deploy/gluetun/README.md#hoardcore-source-routing) for the optional
 application-only network overlay.
+
+The header editor includes User-Agent, Accept, Accept-Language, additional public
+headers, a preview, and reset-to-defaults. Overrides apply to HTTP and Chromium
+catalog/robots requests; photo acquisition retains its own headers. Response safety
+offers **Release cooldown now** with a reason, confirmation, and optional lifting
+of a review pause. This explicit origin-wide override is audited; it never clears
+strike history, request pacing, scan intervals, or budgets, and never queues a scan.
 
 ## Container run
 

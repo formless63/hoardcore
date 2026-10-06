@@ -83,6 +83,27 @@ connection. The shared response policy, origin cooldown, pagination checkpoints,
 and total request budget still apply. Switching transports does not resume a
 paused source or shorten its cooldown.
 
+The same settings panel exposes public catalog header overrides: User-Agent,
+Accept, Accept-Language, and additional Name: value lines. Empty fields use
+module/transport defaults; a configured-header preview shows those choices.
+Both HTTP and Chromium honor the overrides, while Chromium retains native
+metadata unless explicitly changed. Headers apply to catalog and robots.txt, not
+photo capture. These fields are not encrypted secret storage; authentication,
+session, routing/framing, and collector-managed cache-validator headers are not
+accepted by this public header editor. Changes cannot be saved during active
+collection/photo runs, do not change response gates, and are audited by header
+name rather than value. Run history records the effective catalog User-Agent.
+
+**Sources → Response safety → Release cooldown now** is an explicit operator
+override, distinct from normal Resume after review. It requires a reason and
+confirmation, can optionally lift a review pause, and applies to every collection
+sharing the origin. The server compares the reviewed cooldown/pause state before
+changing it, so an outdated confirmation cannot clear a newer gate. The actor,
+former deadline, and reason are recorded. This can release a Retry-After-derived
+break early, but retains strikes, last scan time, next-request pacing, policy,
+and budgets. It never queues a scan. The minimum scan interval may still prevent
+an immediate scan; use the existing UI policy settings to configure that interval.
+
 For upgrades, take a backup first, then rebuild/restart the same app service. A migration failure
 stops the app instance and leaves readiness unavailable; inspect `docker compose logs app` before
 retrying. Do not start multiple app instances against the same database during an upgrade.
@@ -222,10 +243,11 @@ finite run budget, selected access policy, and rejection handling. Increase the 
 for that mode; it never requests every product page. A complete snapshot alone can mark previously
 seen listings missing. Partial, failed, and not-modified runs do not imply absence.
 
-The current application does not implement configurable VPN/proxy routing or egress rotation.
-Project guidance permits operator-configured routing and rotation for public catalog collection;
-adding that support requires a separately requested, tested implementation and deployment.
-Changing egress must not silently reset aggregate source budgets or active cooldowns. Administrators
+The application implements per-source HTTP CONNECT proxy routing and opt-in
+Chromium catalog acquisition. VPN server selection/rotation remains managed by
+the external VPN service rather than by Hoardcore. Changing egress must not
+silently reset aggregate source budgets or active cooldowns; early cooldown
+release is instead a separate confirmed, audited operator action. Administrators
 decide their installation's collection policies; project guidance records specific implementation
 decisions rather than categorical exclusions. Keep fetch, parse, normalize, and persistence stages testable from
 fixtures; never use live source access as an automated test requirement.

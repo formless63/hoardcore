@@ -2,6 +2,7 @@ import { chromium, type Browser, type CDPSession } from 'playwright-core'
 import { createBrowserSourceRelay } from './browser-source-relay.server'
 import { resolvePublicSourceAddress, type SourceResolver } from './source-http.server'
 import type { SourceProxy } from '~/features/sources/source-routing.schemas'
+import { sourceRequestHeadersSchema, type SourceRequestHeaders } from '~/features/sources/request-headers'
 
 const maxResponseBytes = 10 * 1024 * 1024
 
@@ -28,7 +29,8 @@ export async function readBrowserResponseStream(session: Pick<CDPSession, 'send'
 }
 
 /** One fresh browser document per acquisition; no hidden resource/redirect requests. */
-export function createBrowserSourceHttpClient(proxy?: SourceProxy, resolver?: SourceResolver) {
+export function createBrowserSourceHttpClient(proxy?: SourceProxy, resolver?: SourceResolver, inputHeaders: SourceRequestHeaders = {}) {
+  const overrides = sourceRequestHeadersSchema.parse(inputHeaders)
   return async (input: string, init: RequestInit): Promise<Response> => {
     const url = validateBrowserSourceUrl(input)
     await resolvePublicSourceAddress(url.hostname, resolver)
@@ -40,7 +42,7 @@ export function createBrowserSourceHttpClient(proxy?: SourceProxy, resolver?: So
         proxy: { server: relay.url }, timeout: 15000,
         args: ['--disable-quic', '--disable-background-networking', '--disable-component-update', '--disable-domain-reliability'],
       })
-      const configuredAgent = new Headers(init.headers).get('user-agent')
+      const configuredAgent = overrides['user-agent'] ?? new Headers(init.headers).get('user-agent')
       const context = await browser.newContext({ serviceWorkers: 'block', acceptDownloads: false, javaScriptEnabled: false,
         ...(configuredAgent ? { userAgent: configuredAgent } : {}),
       })
@@ -50,11 +52,11 @@ export function createBrowserSourceHttpClient(proxy?: SourceProxy, resolver?: So
         const request = route.request()
         if (requested || !request.isNavigationRequest() || request.method() !== 'GET' || request.url() !== url.href) { await route.abort(); return }
         requested = true
-        // Let Chromium supply its native navigation headers. Conditional cache
-        // validators are the only extra origin headers used by collection.
+        // Retain native browser metadata, apply explicit public UI overrides,
+        // and keep conditional cache validators owned by collection.
         const original = await request.allHeaders()
         const validators = Object.fromEntries([...new Headers(init.headers)].filter(([name]) => ['if-none-match', 'if-modified-since'].includes(name)))
-        await route.continue({ headers: { ...original, ...validators } })
+        await route.continue({ headers: { ...original, ...overrides, ...validators } })
       })
       const session = await context.newCDPSession(page)
       const result = new Promise<Response>((resolve, reject) => {

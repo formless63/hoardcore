@@ -1,0 +1,1 @@
+ALTER TABLE "source_routing" ADD COLUMN "request_headers" jsonb DEFAULT '{}'::jsonb NOT NULL;

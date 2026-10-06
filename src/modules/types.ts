@@ -79,4 +79,6 @@ export interface HoardcoreSourceModule<TInputSchema extends z.ZodType = z.ZodTyp
   sourceRegistration: SourceRegistrationCapability<TInputSchema>
   /** Origin shared by scopes that must respect the same collection access gate. */
   collectionOrigin?: (config: unknown) => string
+  /** Public catalog header defaults surfaced by generic source settings. */
+  collectionHeaders?: (config: unknown) => Readonly<Record<string, string>>
 }

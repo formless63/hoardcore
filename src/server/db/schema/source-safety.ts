@@ -27,7 +27,7 @@ export const sourceSafetyEvents = pgTable('source_safety_events', {
   id: uuid('id').defaultRandom().primaryKey(),
   sourceId: uuid('source_id').notNull().references(() => catalogSources.id, { onDelete: 'cascade' }),
   origin: text('origin').notNull(),
-  eventType: text('event_type').$type<ResponseEventType | 'operator_break' | 'operator_resume' | 'routing_changed'>().notNull(),
+  eventType: text('event_type').$type<ResponseEventType | 'operator_break' | 'operator_resume' | 'operator_release' | 'routing_changed' | 'request_headers_changed'>().notNull(),
   message: text('message').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, t => [index('source_safety_events_source_idx').on(t.sourceId, t.createdAt)])

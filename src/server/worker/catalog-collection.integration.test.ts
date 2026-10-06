@@ -2,7 +2,7 @@ import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { normalizeShopifyCatalogUrl } from '~/modules/shopify/source-config'
 import { closeDatabase, getDatabase } from '../db/index.server'
-import { catalogSources, collectionRunEvents, collectionRuns, sourceEvidence, sourceListingCurrent, sourceListingObservations, sourceListings, sourceOriginSafety } from '../db/schema'
+import { catalogSources, collectionRunEvents, collectionRuns, sourceEvidence, sourceListingCurrent, sourceListingObservations, sourceListings, sourceOriginSafety, sourceRouting } from '../db/schema'
 import { runCatalogCollection } from './tasks'
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL
@@ -17,6 +17,21 @@ describe.skipIf(!testDatabaseUrl)('catalog collection worker safety', () => {
   })
 
   afterAll(async () => { await closeDatabase() })
+
+  it('uses durable UI header settings in the collection worker and records the selected agent', async () => {
+    const normalized = normalizeShopifyCatalogUrl(`https://fixture-${crypto.randomUUID()}.invalid/collections/sale`)
+    const [source] = await getDatabase().insert(catalogSources).values({ moduleId: 'shopify', displayName: 'Header fixture', sourceKey: normalized.sourceKey,
+      config: { ...normalized.config, robotsPolicy: 'operator_approved' } }).returning()
+    sourceId = source.id
+    await getDatabase().insert(sourceRouting).values({ sourceId, mode: 'direct', requestHeaders: { 'user-agent': 'operator-agent', 'accept-language': 'en-US', 'x-catalog-client': 'fixture' } })
+    const [run] = await getDatabase().insert(collectionRuns).values({ sourceId, requestLimit: 1 }).returning()
+    const http = vi.fn(async (_url: string, _init: { headers: Record<string, string>; redirect: 'error'; signal?: AbortSignal }) => new Response('{"products":[]}'))
+    await runCatalogCollection({ sourceId, runId: run.id }, { logger: { info: vi.fn() } }, { collectionEnabled: true, http })
+    expect(http).toHaveBeenCalledOnce()
+    expect(http.mock.calls[0]![1].headers).toMatchObject({ 'user-agent': 'operator-agent', 'accept-language': 'en-US', 'x-catalog-client': 'fixture' })
+    const events = await getDatabase().select().from(collectionRunEvents).where(eq(collectionRunEvents.runId, run.id))
+    expect(events.some(event => event.message === 'Catalog User-Agent: operator-agent')).toBe(true)
+  })
 
   it('persists opt-in card counts and timestamped HTML evidence without guessing other variants', async () => {
     const normalized = normalizeShopifyCatalogUrl(`https://fixture-${crypto.randomUUID()}.invalid/collections/sale`)

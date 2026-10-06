@@ -141,6 +141,13 @@
       "when": 1791267040915,
       "tag": "0019_glossy_captain_flint",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791283737868,
+      "tag": "0020_left_vargas",
+      "breakpoints": true
     }
   ]
 }

@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 import { closeDatabase, getDatabase } from '~/server/db/index.server'
 import { catalogSources, collectionRuns, mediaCaptureRuns, sourceOriginSafety, sourceRouting } from '~/server/db/schema'
 import { readSourceProxy, readSourceRouting, saveSourceRoutingInDatabase } from './source-routing.server'
+import { shopifyCollectionPolicyDefaults } from '~/modules/shopify/source-config'
 
 if (process.env.TEST_DATABASE_URL) process.env.DATABASE_URL = process.env.TEST_DATABASE_URL
 process.env.BETTER_AUTH_SECRET ??= 'routing-test-encryption-root-not-for-production'
@@ -21,17 +22,19 @@ suite('durable source routing', () => {
     await closeDatabase()
   })
   it('defaults to direct; stores only encrypted passwords and preserves the complete safety state', async () => {
-    expect(await readSourceRouting(db(), source.id)).toEqual({ transport: 'http', mode: 'direct', endpoint: '', username: '', hasPassword: false })
+    const headerDefaults = { requestHeaders: {}, defaultHeaders: { 'user-agent': shopifyCollectionPolicyDefaults.userAgent, accept: 'application/json' } }
+    expect(await readSourceRouting(db(), source.id)).toEqual({ ...headerDefaults, transport: 'http', mode: 'direct', endpoint: '', username: '', hasPassword: false })
     const before = await db().select().from(sourceOriginSafety).where(eq(sourceOriginSafety.origin, origin))
     const saved = await saveSourceRoutingInDatabase(db(), { sourceId: source.id, mode: 'http_proxy', endpoint: 'http://proxy:8888', username: 'fixture', password: 'private-password' })
-    expect(saved).toEqual({ transport: 'http', mode: 'http_proxy', endpoint: 'http://proxy:8888/', username: 'fixture', hasPassword: true })
+    expect(saved).toEqual({ ...headerDefaults, transport: 'http', mode: 'http_proxy', endpoint: 'http://proxy:8888/', username: 'fixture', hasPassword: true })
     expect(JSON.stringify(saved)).not.toContain('private-password')
     expect(JSON.stringify(await db().select().from(sourceRouting).where(eq(sourceRouting.sourceId, source.id)))).not.toContain('private-password')
     expect(await readSourceProxy(db(), source.id)).toMatchObject({ password: 'private-password' })
-    await saveSourceRoutingInDatabase(db(), { sourceId: source.id, mode: 'http_proxy', transport: 'browser', endpoint: 'http://proxy:8888', username: 'fixture' })
+    await saveSourceRoutingInDatabase(db(), { sourceId: source.id, mode: 'http_proxy', transport: 'browser', endpoint: 'http://proxy:8888', username: 'fixture', requestHeaders: { 'User-Agent': 'fixture-browser-agent', 'Accept-Language': 'en-US,en;q=0.9' } })
     await saveSourceRoutingInDatabase(db(), { sourceId: source.id, mode: 'http_proxy', endpoint: 'http://proxy:8888', username: 'fixture' })
     expect(await readSourceProxy(db(), source.id)).toMatchObject({ password: 'private-password' })
     expect((await readSourceRouting(db(), source.id)).transport).toBe('browser')
+    expect((await readSourceRouting(db(), source.id)).requestHeaders).toEqual({ 'user-agent': 'fixture-browser-agent', 'accept-language': 'en-US,en;q=0.9' })
     await expect(saveSourceRoutingInDatabase(db(), { sourceId: source.id, mode: 'http_proxy', endpoint: 'http://another-proxy:8888', username: 'fixture' })).rejects.toThrow('Re-enter')
     await saveSourceRoutingInDatabase(db(), { sourceId: source.id, mode: 'direct' })
     expect(await readSourceProxy(db(), source.id)).toBeUndefined()
