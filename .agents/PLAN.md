@@ -27,7 +27,7 @@ Establish the application shell, authentication, database/migrations, module con
 
 ### Shopify source module
 
-Build the first platform source integration around Shopify storefront/catalog behavior. Keep collection conservative and configurable. Separate fetching, parsing, normalization, and persistence so store-specific quirks do not leak into core models.
+Build the first platform source integration around Shopify storefront/catalog behavior. Keep collection bounded, reliable, and operator-configurable. Separate fetching, parsing, normalization, and persistence so store-specific quirks do not leak into core models.
 
 The Shopify module is reusable platform support, not a singleton source. An installation may
 register many independent storefronts, collections, or other supported scopes against the same
@@ -35,6 +35,8 @@ module. Core workflows operate on source registrations and module capabilities r
 assuming one retailer, one URL, or one collection.
 
 The module should support catalog snapshots and change observations before deeper retailer-specific behavior is considered.
+
+Operator-managed VPN/proxy routing and egress rotation for public catalog collection are within project scope when they address a demonstrated collection requirement. Prefer UI controls, explicit aggregate source budgets, observable routing, and server-only credentials. Routing changes must not silently reset cooldowns or budgets. This direction does not imply that routing support exists today or authorize deployment without a concrete implementation request.
 
 ### Source media
 
@@ -83,6 +85,6 @@ When useful, add direct research/model execution with TanStack AI. It should use
 - Redis or message brokers;
 - Elasticsearch/Meilisearch;
 - object storage;
-- proxy rotation or anti-bot evasion;
+- authentication/CAPTCHA bypass, unauthorized private-data collection, or disruptive traffic;
 - provider-specific AI data models;
 - a second state/form/table framework alongside TanStack primitives.

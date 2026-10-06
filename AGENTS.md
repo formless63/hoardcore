@@ -99,14 +99,16 @@ Do not embed retailer-specific selectors, URLs, rate limits, or assumptions in c
 
 ## Collection behavior
 
-Source collection must be conservative and operator-controlled:
+Source collection must be reliable, bounded, and operator-controlled. Conservative defaults are a starting point, not a blanket restriction on operator-approved collection strategies:
 
-- Respect published access controls and `robots.txt` where applicable.
+- Keep collection scoped to public data or data the operator is authorized to access. Check `robots.txt` by default and expose explicit, auditable operator access-policy choices.
 - Use a stable, identifiable user agent.
 - Keep concurrency and pacing explicit and configurable per source.
 - Cache/reuse source data instead of repeatedly requesting identical pages.
-- Honor `Retry-After`, back off on throttling, and stop on persistent rejection.
-- Never implement proxy rotation, identity rotation, CAPTCHA bypass, or other mechanisms intended to evade a site's controls.
+- Make response handling, cooldowns, retry budgets, and escalation configurable per source; honor `Retry-After` and prevent unbounded retry loops.
+- VPN/proxy routing, including operator-configured egress rotation for public catalog collection, is permitted project scope. Keep aggregate per-source pacing and request budgets independent of the selected egress; changing IP must not silently reset those budgets or an active cooldown.
+- Do not bypass authentication, obtain unauthorized private data, bypass CAPTCHAs, impersonate another user, or generate disruptive traffic.
+- Prefer UI-managed settings and observable run logs over hidden environment-only behavior. A policy-document change alone does not authorize deployment, routing changes, or removal of runtime safeguards.
 - Store observations/history separately from the current normalized state when history matters.
 
 See `.agents/skills/safe-source-collection/SKILL.md` when implementing collectors.

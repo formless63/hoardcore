@@ -1,6 +1,6 @@
 ---
 name: safe-source-collection
-description: Design or modify catalog/source collectors so they are conservative, testable, and do not evade source controls.
+description: Design or modify catalog/source collectors with testable stages, operator-controlled traffic policies, and configurable network routing.
 ---
 
 # Safe source collection
@@ -20,18 +20,22 @@ Tests for parse/normalize must run from fixtures without live network access.
 
 ## Traffic controls
 
-Every collector must define or inherit explicit controls for concurrency, minimum pacing, retries, and a request ceiling. Defaults should be conservative.
+Every collector must define or inherit explicit controls for concurrency, minimum pacing, retries, and a request ceiling. Conservative defaults are a starting point; support explicit, bounded operator-approved policies rather than treating defaults as immutable project rules.
 
 A collector must:
 
 - identify itself consistently;
 - honor `Retry-After` when present;
-- back off on throttling and transient failures;
-- stop/escalate on persistent rejection rather than increasing pressure;
+- apply the configured cooldown, retry budget, and escalation policy on throttling and transient failures;
+- stop or escalate when the configured budget or review threshold is reached;
 - reuse cached responses or conditional requests when practical;
 - avoid product-detail requests when collection-level data is sufficient.
 
-Do not implement rotating proxies, rotating identities, CAPTCHA bypass, browser fingerprint spoofing, or other mechanisms whose purpose is to evade access controls.
+VPN/proxy routing and operator-configured egress rotation for public catalog collection are permitted project scope. Keep credentials server-only, routing choices observable, and aggregate source request budgets and cooldown state independent of the selected egress. Changing IP must not silently reset a budget or active cooldown. Prefer UI-managed configuration where practical.
+
+Keep collection scoped to public data or data the operator is authorized to access. Check robots.txt by default and retain explicit, auditable operator access-policy choices. Do not bypass authentication or CAPTCHAs, impersonate other users, obtain unauthorized private data, or generate disruptive traffic.
+
+Changing this guidance does not deploy networking infrastructure or alter existing runtime safeguards. Implement and verify those changes only when requested; preserve unrelated source settings and production state.
 
 ## Data rules
 
