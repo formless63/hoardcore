@@ -7,6 +7,13 @@ function response(status: number, payload: unknown = {}, headers: Record<string,
 }
 
 describe('Shopify collection transport', () => {
+  it('uses the Chrome-style default and preserves an explicitly configured user agent', async () => {
+    const http = vi.fn().mockResolvedValue(response(200, { products: [] }))
+    await fetchShopifyCollectionPage('https://store.invalid/', 1, undefined, { http })
+    expect(http.mock.calls[0]?.[1].headers['user-agent']).toBe('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36')
+    await fetchShopifyCollectionPage('https://store.invalid/', 1, undefined, { http, userAgent: 'Operator-selected/1.0' })
+    expect(http.mock.calls[1]?.[1].headers['user-agent']).toBe('Operator-selected/1.0')
+  })
   it('uses the collection-level JSON endpoint and stable identifiable headers', async () => {
     const http = vi.fn().mockResolvedValue(response(200, { products: [] }, { etag: '"v1"', 'last-modified': 'yesterday' }))
     const result = await fetchShopifyCollectionPage('https://store.invalid/collections/sale?sort=price', 2, undefined, {
@@ -16,7 +23,7 @@ describe('Shopify collection transport', () => {
     })
     expect(result.endpoint).toBe('https://store.invalid/collections/sale/products.json?limit=250&page=2')
     expect(http).toHaveBeenCalledWith(result.endpoint, expect.objectContaining({
-      headers: expect.objectContaining({ accept: 'application/json', 'user-agent': expect.stringContaining('Hoardcore') }),
+      headers: expect.objectContaining({ accept: 'application/json', 'user-agent': expect.stringContaining('Chrome/') }),
       redirect: 'error',
     }))
     expect(result.cache).toMatchObject({ etag: '"v1"', lastModified: 'yesterday', payload: { products: [] } })

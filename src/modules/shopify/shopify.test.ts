@@ -5,6 +5,7 @@ import partialFixture from './fixtures/collection-partial.json'
 import blankOptionalFixture from './fixtures/collection-blank-optional.json'
 import malformedFixture from './fixtures/collection-malformed.json'
 import { normalizeShopifyCollection, parseShopifyCollection } from './contracts'
+import { shopifyCollectionPolicyDefaults } from './source-config'
 
 describe('Shopify source registration', () => {
   it('keeps stock-card HTML collection opt-in and scoped to the registered source', () => {
@@ -21,7 +22,7 @@ describe('Shopify source registration', () => {
   it('accepts a bare hostname and normalizes it to an HTTPS origin', () => {
     expect(shopifyModule.sourceRegistration.normalize({ catalogUrl: 'Example.myshopify.com' }))
       .toEqual({
-        config: { catalogUrl: 'https://example.myshopify.com/', minimumDelayMs: 1000, maxRequests: 3, maxRetries: 2, backoffBaseMs: 1000, userAgent: 'Hoardcore/0.1 (conservative catalog collector)' },
+        config: { catalogUrl: 'https://example.myshopify.com/', minimumDelayMs: 1000, maxRequests: 3, maxRetries: 2, backoffBaseMs: 1000, userAgent: shopifyCollectionPolicyDefaults.userAgent },
         sourceKey: 'example.myshopify.com',
         summary: 'example.myshopify.com',
       })
@@ -33,7 +34,7 @@ describe('Shopify source registration', () => {
         catalogUrl: 'https://shop.example/collections/clearance/?sort_by=price-ascending',
       }),
     ).toEqual({
-      config: { catalogUrl: 'https://shop.example/collections/clearance', minimumDelayMs: 1000, maxRequests: 3, maxRetries: 2, backoffBaseMs: 1000, userAgent: 'Hoardcore/0.1 (conservative catalog collector)' },
+      config: { catalogUrl: 'https://shop.example/collections/clearance', minimumDelayMs: 1000, maxRequests: 3, maxRetries: 2, backoffBaseMs: 1000, userAgent: shopifyCollectionPolicyDefaults.userAgent },
       sourceKey: 'shop.example/collections/clearance',
       summary: 'shop.example/collections/clearance',
     })

@@ -1,4 +1,4 @@
-import { normalizeShopifyCatalogUrl } from './source-config'
+import { normalizeShopifyCatalogUrl, shopifyCollectionPolicyDefaults } from './source-config'
 import { SourceSafetyStop } from '~/lib/source-safety-error'
 
 export interface ShopifyHttpResponse {
@@ -176,7 +176,7 @@ export async function fetchShopifyCollectionPage(
   const run = options.run ?? createShopifyCollectionRun(maxRequests)
   const headers: Record<string, string> = {
     accept: 'application/json',
-    'user-agent': options.userAgent ?? 'Hoardcore/0.1 (conservative catalog collector)',
+    'user-agent': options.userAgent ?? shopifyCollectionPolicyDefaults.userAgent,
   }
   if (cache?.etag) headers['if-none-match'] = cache.etag
   if (cache?.lastModified) headers['if-modified-since'] = cache.lastModified

@@ -4,7 +4,7 @@ import { normalizeCurrency } from '../../lib/currency'
 
 export const shopifyCollectionPolicyDefaults = {
   minimumDelayMs: 1000, maxRequests: 3, maxRetries: 2, backoffBaseMs: 1000,
-  userAgent: 'Hoardcore/0.1 (conservative catalog collector)',
+  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36',
 } as const
 
 export function normalizeShopifyCatalogUrl(value: string, currency?: unknown): NormalizedSourceConfig {
