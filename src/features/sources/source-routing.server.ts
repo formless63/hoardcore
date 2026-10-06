@@ -6,7 +6,7 @@ import { decryptProxyPassword, encryptProxyPassword } from './source-routing-cry
 import { proxyEndpointSchema, sourceRoutingInputSchema, type SourceProxy, type SourceRoutingSummary } from './source-routing.schemas'
 
 function summarize(row?: typeof sourceRouting.$inferSelect): SourceRoutingSummary {
-  return { mode: row?.mode ?? 'direct', endpoint: row?.endpoint ?? '', username: row?.username ?? '', hasPassword: Boolean(row?.encryptedPassword) }
+  return { transport: row?.transport ?? 'http', mode: row?.mode ?? 'direct', endpoint: row?.endpoint ?? '', username: row?.username ?? '', hasPassword: Boolean(row?.encryptedPassword) }
 }
 
 export async function readSourceRouting(db: Database, sourceId: string) {
@@ -41,11 +41,11 @@ export async function saveSourceRoutingInDatabase(db: Database, input: unknown) 
       throw new Error('Re-enter or explicitly clear the password when changing proxy address or username')
     const encryptedPassword = data.mode === 'direct' || data.clearPassword ? null
       : data.password ? encryptProxyPassword(data.password, data.sourceId) : prior?.encryptedPassword ?? null
-    const values = { mode: data.mode, endpoint, username: data.mode === 'direct' ? '' : data.username, encryptedPassword, updatedAt: new Date() }
+    const values = { transport: data.transport ?? prior?.transport ?? 'http', mode: data.mode, endpoint, username: data.mode === 'direct' ? '' : data.username, encryptedPassword, updatedAt: new Date() }
     const [row] = await tx.insert(sourceRouting).values({ sourceId: data.sourceId, ...values })
       .onConflictDoUpdate({ target: sourceRouting.sourceId, set: values }).returning()
     await tx.insert(sourceSafetyEvents).values({ sourceId: data.sourceId, origin: sourceOrigin(source), eventType: 'routing_changed',
-      message: `Operator changed source network routing to ${data.mode === 'http_proxy' ? 'HTTP proxy (no direct fallback)' : 'direct'}. Cooldowns and request budgets unchanged.` })
+      message: `Operator selected ${values.transport === 'browser' ? 'Chromium' : 'HTTP'} catalog transport with ${data.mode === 'http_proxy' ? 'HTTP proxy (no direct fallback)' : 'direct routing'}. Cooldowns and request budgets unchanged.` })
     return summarize(row)
   })
 }

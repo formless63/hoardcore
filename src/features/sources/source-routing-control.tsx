@@ -23,7 +23,7 @@ function RoutingEditor({ sourceId, routing }: { sourceId: string; routing: Sourc
   const queryClient = useQueryClient()
   const [message, setMessage] = useState('')
   const form = useForm({
-    defaultValues: { mode: routing.mode, endpoint: routing.endpoint, username: routing.username, password: '', clearPassword: false },
+    defaultValues: { transport: routing.transport, mode: routing.mode, endpoint: routing.endpoint, username: routing.username, password: '', clearPassword: false },
     onSubmit: async ({ value }) => {
       setMessage('')
       const parsed = sourceRoutingInputSchema.safeParse({ sourceId, ...value })
@@ -40,6 +40,7 @@ function RoutingEditor({ sourceId, routing }: { sourceId: string; routing: Sourc
     },
   })
   return <form className="mt-3 space-y-3 text-xs" onSubmit={event => { event.preventDefault(); void form.handleSubmit() }}>
+    <form.Field name="transport">{field => <label className="block">Catalog transport<select className={inputClass} value={field.state.value} onChange={event => field.handleChange(event.target.value as 'http' | 'browser')}><option value="http">Standard HTTP client</option><option value="browser">Chromium browser</option></select></label>}</form.Field>
     <form.Field name="mode">{field => <label className="block">Route<select className={inputClass} value={field.state.value} onChange={event => field.handleChange(event.target.value as 'direct' | 'http_proxy')}><option value="direct">Direct connection</option><option value="http_proxy">HTTP CONNECT proxy</option></select></label>}</form.Field>
     <form.Subscribe selector={state => state.values.mode}>{mode => mode === 'http_proxy' ? <div className="grid gap-3 sm:grid-cols-2">
       <form.Field name="endpoint">{field => <label className="block sm:col-span-2">Proxy URL<input className={inputClass} value={field.state.value} onBlur={field.handleBlur} onChange={event => field.handleChange(event.target.value)} placeholder="http://proxy:8888" maxLength={2048} required autoComplete="off" /></label>}</form.Field>
@@ -48,6 +49,7 @@ function RoutingEditor({ sourceId, routing }: { sourceId: string; routing: Sourc
       {routing.hasPassword ? <form.Field name="clearPassword">{field => <label className="flex items-center gap-1"><input type="checkbox" checked={field.state.value} onChange={event => field.handleChange(event.target.checked)} />Clear saved password</label>}</form.Field> : null}
     </div> : null}</form.Subscribe>
     <p className="text-muted-foreground">Applies to catalog, robots.txt, and photo requests only. Proxy failures never fall back to direct connections. Cooldowns, request limits, and schedules stay unchanged. Passwords are encrypted and never returned to this page. Selecting direct clears saved proxy credentials.</p>
+    <p className="text-muted-foreground">Chromium uses native browser navigation for catalog and robots.txt requests. It fetches only the requested document, without redirects or background resources. Photos continue to use the HTTP client through the same route.</p>
     <form.Subscribe selector={state => state.isSubmitting}>{busy => <Button type="submit" size="small" disabled={busy}>{busy ? 'Saving…' : 'Save network routing'}</Button>}</form.Subscribe>
     {message ? <p role="status">{message}</p> : null}
   </form>

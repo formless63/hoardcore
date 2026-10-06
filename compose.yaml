@@ -1,6 +1,10 @@
 services:
   app:
     build: .
+    init: true
+    shm_size: 256mb
+    security_opt:
+      - seccomp=./deploy/browser-seccomp.json
     restart: unless-stopped
     # Let the embedded worker finish a paced batch before replacing the app.
     stop_grace_period: 90s

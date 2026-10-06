@@ -92,7 +92,15 @@ database. CI provisions PostgreSQL 18, applies migrations, and enables these tes
 Source HTTP routing can be configured in Sources → Network routing. Each source
 can use direct connections or an authenticated HTTP CONNECT proxy with an
 encrypted password. Proxy failures do not fall back to direct connections;
-changing routes does not reset source cooldowns or request budgets. See
+changing routes does not reset source cooldowns or request budgets. The same UI
+offers an opt-in Chromium catalog transport with native browser networking.
+It fetches only the requested HTTPS document; redirects, JavaScript, service workers,
+and background resources are disabled. Each request uses a fresh browser context,
+the configured route, and the existing source response policy. Photos retain the
+standard HTTP transport. The image includes Chromium; Compose enables its sandbox
+using the [upstream Playwright seccomp profile](https://github.com/microsoft/playwright/blob/v1.63.0/utils/docker/seccomp_profile.json)
+vendored in `deploy/browser-seccomp.json`. Keep that profile enabled when deploying
+the browser transport. See
 [shared VPN setup](deploy/gluetun/README.md#hoardcore-source-routing) for the optional
 application-only network overlay.
 

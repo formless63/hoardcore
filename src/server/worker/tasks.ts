@@ -1,7 +1,8 @@
 import type { JobHelpers, Task, TaskList } from 'graphile-worker'
 import { and, desc, eq, inArray, lte, isNotNull, isNull, or } from 'drizzle-orm'
 import { getDatabase } from '../db/index.server'
-import { readSourceProxy } from '~/features/sources/source-routing.server'
+import { readSourceProxy, readSourceRouting } from '~/features/sources/source-routing.server'
+import { createBrowserSourceHttpClient } from '~/lib/browser-source-http.server'
 import { catalogSources } from '../db/schema/catalog-sources'
 import { collectionRunEvents, collectionRuns, type JsonValue } from '../db/schema/catalog'
 import { persistCatalogSnapshot } from '../db/catalog-persistence.server'
@@ -145,8 +146,12 @@ export async function runCatalogCollection(
       ? 'Collection started with operator-approved access; robots.txt preflight skipped.'
       : 'Collection started. Checking source access policy.')
     const proxy = dependencies.http ? undefined : await readSourceProxy(db, source.id)
+    const routing = dependencies.http ? undefined : await readSourceRouting(db, source.id)
     await log(proxy ? 'Network routing: HTTP proxy; no direct fallback.' : 'Network routing: direct.')
-    const http = withSourceResponseSafety(db, source, dependencies.http ?? createSecureShopifyHttpClient({ resolver: dependencies.resolver, request: dependencies.request, proxy }))
+    await log(`Catalog transport: ${routing?.transport === 'browser' ? 'Chromium browser' : 'HTTP client'}.`)
+    const http = withSourceResponseSafety(db, source, dependencies.http ?? (routing?.transport === 'browser'
+      ? createBrowserSourceHttpClient(proxy, dependencies.resolver)
+      : createSecureShopifyHttpClient({ resolver: dependencies.resolver, request: dependencies.request, proxy })))
     const accessPolicy = dependencies.accessPolicy ?? (persistedPolicy.robotsPolicy === 'operator_approved'
       ? async () => true
       : createRobotsAccessPolicy(run, http, policy.userAgent, async (requestCount, status, failureCode) => {

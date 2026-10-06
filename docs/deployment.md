@@ -53,7 +53,8 @@ curl -fsS http://127.0.0.1:3000/api/ready
 ### Verify a production image
 
 The runtime stage contains only production dependencies, while retaining
-Nitro's external runtime packages and Sharp's Alpine/musl native addon. Before
+Nitro's external runtime packages, Sharp's glibc native addon, and the locked
+Chromium browser. Before
 pushing a locally built image, verify the native image pipeline without
 starting the application or contacting a source:
 
@@ -64,6 +65,23 @@ pnpm docker:smoke
 
 `docker:smoke` runs a one-pixel Sharp conversion inside the built image. It
 does not need application configuration or a database.
+
+The browser catalog transport is selected per source in **Sources → Network routing**.
+Compose runs the app with an init process, private 256 MiB shared memory, and
+`deploy/browser-seccomp.json` (Playwright's upstream sandbox profile). Chromium
+runs as the existing non-root application user with its sandbox enabled. Do not
+replace that profile with `seccomp=unconfined` or disable the browser sandbox.
+When using a custom Compose file, retain these app settings and the profile file.
+Verify browser launch without contacting a source:
+
+```sh
+docker compose run --rm --no-deps --entrypoint node app --input-type=module -e 'import {chromium} from "playwright-core"; const b=await chromium.launch({channel:"chromium",chromiumSandbox:true}); console.log(await b.version()); await b.close()'
+```
+
+Browser collection never silently retries using the HTTP transport or a direct
+connection. The shared response policy, origin cooldown, pagination checkpoints,
+and total request budget still apply. Switching transports does not resume a
+paused source or shorten its cooldown.
 
 For upgrades, take a backup first, then rebuild/restart the same app service. A migration failure
 stops the app instance and leaves readiness unavailable; inspect `docker compose logs app` before
