@@ -1,0 +1,12 @@
+# Optional source-proxy attachment. Database and gateway networking stay intact.
+# docker compose -f compose.yaml -f compose.gateway.yaml -f compose.proxy.yaml up -d
+services:
+  app:
+    networks:
+      default: {}
+      source-proxy: {}
+
+networks:
+  source-proxy:
+    external: true
+    name: ${SOURCE_PROXY_NETWORK:-glue_net}

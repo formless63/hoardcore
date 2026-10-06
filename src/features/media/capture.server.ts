@@ -1,6 +1,8 @@
 import { eq } from 'drizzle-orm'
 import robotsParser from 'robots-parser'
 import sharp from 'sharp'
+import { createSourceHttpClient } from '~/lib/source-http.server'
+import { readSourceProxy } from '~/features/sources/source-routing.server'
 import type { Database } from '~/server/db/db.server'
 import { catalogSources } from '~/server/db/schema/catalog-sources'
 import { mediaCaptureRuns, listingMedia } from '~/server/db/schema/media'
@@ -57,9 +59,7 @@ function assertPublicHttpsUrl(value: string) {
   let url: URL
   try { url = new URL(value) } catch { throw new MediaCaptureError('Image URL is invalid', 'source_url_rejected') }
   if (url.protocol !== 'https:' || url.username || url.password) throw new MediaCaptureError('Image URL must be credential-free HTTPS', 'source_url_rejected')
-  // Literal local/private IPs are never valid media origins. Hostname allowlisting
-  // prevents arbitrary public hosts too; deployments should use a controlled DNS
-  // resolver if they need protection against hostile DNS records.
+  // The production transport also validates and pins every resolved address.
   if (url.hostname === 'localhost' || url.hostname.endsWith('.localhost') || /^\d{1,3}(?:\.\d{1,3}){3}$/u.test(url.hostname) || url.hostname.includes(':')) {
     throw new MediaCaptureError('Image URL host is not a permitted public hostname', 'source_url_rejected')
   }
@@ -229,7 +229,7 @@ export async function captureListingMedia(input: CaptureListingMediaInput) {
   }
   const reused = await reuseListingMedia(input.db, candidate.listingId, sourceUrl)
   if (reused) return { status: 'captured' as const, capture: reused }
-  const http = input.http ?? ((url: string, init: RequestInit) => fetch(url, init) as Promise<MediaHttpResponse>)
+  const http = input.http ?? createSourceHttpClient(await readSourceProxy(input.db, candidate.sourceId))
   const accessPolicy = input.accessPolicy ?? (usesOperatorApprovedShopifyAccess(candidate.config)
     ? async () => true
     : createMediaRobotsAccessPolicy(input.budget, http, input.policy.userAgent, input.policy.minimumDelayMs, input.wait))
@@ -279,7 +279,11 @@ export async function runMediaCapture(db: Database, runId: string, dependencies:
   policy.concurrency = 1
   policy.minimumDelayMs = Math.max(policy.minimumDelayMs, safetyPolicy.minimumDelaySeconds * 1000)
   const budget: MediaRequestBudget = { requests: 0, maxRequests: policy.requestLimit }
-  const http = withSourceResponseSafety(db, source, dependencies.http ?? ((url: string, init: RequestInit) => fetch(url, init) as Promise<MediaHttpResponse>))
+  let routedClient: ReturnType<typeof createSourceHttpClient> | undefined
+  const http = withSourceResponseSafety(db, source, dependencies.http ?? (async (url: string, init: RequestInit) => {
+    routedClient ??= createSourceHttpClient(await readSourceProxy(db, source.id))
+    return routedClient(url, init)
+  }))
   const accessPolicy = dependencies.accessPolicy ?? (source.moduleId === 'shopify' && usesOperatorApprovedShopifyAccess(source.config)
     ? async () => true
     : createMediaRobotsAccessPolicy(budget, http, policy.userAgent, policy.minimumDelayMs, dependencies.wait))

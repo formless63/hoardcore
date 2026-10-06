@@ -89,6 +89,13 @@ pnpm check
 Database integration tests run when `TEST_DATABASE_URL` points at an already-migrated test
 database. CI provisions PostgreSQL 18, applies migrations, and enables these tests automatically.
 
+Source HTTP routing can be configured in Sources → Network routing. Each source
+can use direct connections or an authenticated HTTP CONNECT proxy with an
+encrypted password. Proxy failures do not fall back to direct connections;
+changing routes does not reset source cooldowns or request budgets. See
+[shared VPN setup](deploy/gluetun/README.md#hoardcore-source-routing) for the optional
+application-only network overlay.
+
 ## Container run
 
 The regular app container applies committed migrations before becoming ready; no migration

@@ -118,8 +118,41 @@ that uses proxy settings. Percent-encode credentials in URLs if necessary.
 There is no direct-egress fallback configured here, but a client's own proxy
 handling determines whether it can fall back. Verify the actual client exit IP
 and its behavior while the VPN is stopped before relying on that routing.
-Hoardcore's current custom catalog transport does not implement these proxy
-settings: this infrastructure template does not reroute Hoardcore.
+Hoardcore uses its explicit per-source routing settings instead of these
+environment variables. See the wiring instructions below.
+
+### Hoardcore source routing
+
+Attach only the application to the shared network, retaining its database and
+gateway networks:
+
+```bash
+docker compose -f compose.yaml -f compose.gateway.yaml -f compose.proxy.yaml up -d app
+```
+
+Omit the gateway overlay if that installation does not use it. The optional
+`SOURCE_PROXY_NETWORK` selects an external network other than `glue_net`.
+Keep the same overlays selected when recreating/upgrading the app.
+
+In **Sources → Network routing**, select **HTTP CONNECT proxy**, enter
+`http://gluetun:8888`, and save the Gluetun HTTP proxy username and password.
+These are the proxy credentials, not Companion's login or Gluetun control API
+key. Settings are source-specific; other sources remain direct until configured.
+The password is encrypted in PostgreSQL and is never returned to the browser.
+Leaving the password blank retains it; changing the proxy address/username
+requires re-entering or explicitly clearing it. Selecting direct removes the
+stored credentials. Keep `INTEGRATION_ENCRYPTION_KEY` (when set) or
+`BETTER_AUTH_SECRET` stable so saved passwords remain readable.
+
+Catalog, stock supplements, robots.txt, and media use the selected route. The
+transport connects the proxy to a validated public destination IP while
+preserving the original TLS hostname and HTTP Host header. Proxy rejection or
+unavailability stops the request without a direct fallback. Origin cooldowns,
+retry budgets, scan intervals, and request ceilings remain in force across VPN
+switches. Database, login, gateway, and notification traffic are not rerouted.
+Companion can switch the VPN without recreating Hoardcore: new proxy connections
+use Docker DNS to find Gluetun. In-flight requests may fail during a switch and
+receive the configured network-error response policy.
 
 Full-tunnel clients in another Compose stack can instead use
 `network_mode: "container:gluetun"`, without their own `networks` or `ports`.

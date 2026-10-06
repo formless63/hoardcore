@@ -11,6 +11,7 @@ import type { listMediaCaptureRuns } from '~/features/media/media.functions'
 import { SourceCatalogOptionsControl } from './source-catalog-options-control'
 import { formatScheduledDate } from './source-schedule'
 import { SourceSafetyControl, useSourceSafety } from './source-safety-control'
+import { SourceRoutingControl } from './source-routing-control'
 
 const createdDateFormatter = new Intl.DateTimeFormat('en', {
   day: 'numeric',
@@ -84,6 +85,7 @@ function SourceControls({ source, run, mediaRun, defaultRequestLimit, mediaCaptu
   const scanInterval = Boolean(state?.lastScanAt && query.data && state.lastScanAt.getTime() + query.data.policy.minimumScanHours * 3_600_000 > Date.now())
   return <div className="min-w-0 space-y-2">
     <SourceSafetyControl sourceId={source.id} query={query} />
+    <SourceRoutingControl sourceId={source.id} />
     <section className="rounded border border-border/70 p-2" aria-label={`Collection controls for ${source.displayName}`}>
       <SourceRunControl sourceId={source.id} run={run} defaultRequestLimit={defaultRequestLimit} disabled={blocked || scanInterval} />
     </section>
