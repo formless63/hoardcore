@@ -207,7 +207,7 @@ seen listings missing. Partial, failed, and not-modified runs do not imply absen
 The current application does not implement configurable VPN/proxy routing or egress rotation.
 Project guidance permits operator-configured routing and rotation for public catalog collection;
 adding that support requires a separately requested, tested implementation and deployment.
-Changing egress must not silently reset aggregate source budgets or active cooldowns. Authentication
-and CAPTCHA bypass, user impersonation, unauthorized private-data collection, and disruptive
-traffic remain out of scope. Keep fetch, parse, normalize, and persistence stages testable from
+Changing egress must not silently reset aggregate source budgets or active cooldowns. Administrators
+decide their installation's collection policies; project guidance records specific implementation
+decisions rather than categorical exclusions. Keep fetch, parse, normalize, and persistence stages testable from
 fixtures; never use live source access as an automated test requirement.

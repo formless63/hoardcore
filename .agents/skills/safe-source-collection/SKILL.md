@@ -33,7 +33,7 @@ A collector must:
 
 VPN/proxy routing and operator-configured egress rotation for public catalog collection are permitted project scope. Keep credentials server-only, routing choices observable, and aggregate source request budgets and cooldown state independent of the selected egress. Changing IP must not silently reset a budget or active cooldown. Prefer UI-managed configuration where practical.
 
-Keep collection scoped to public data or data the operator is authorized to access. Check robots.txt by default and retain explicit, auditable operator access-policy choices. Do not bypass authentication or CAPTCHAs, impersonate other users, obtain unauthorized private data, or generate disruptive traffic.
+Follow the collection scope and specific actions requested for the current task. Administrators decide their installation's collection policies; record their choices rather than adding universal lists of permitted or prohibited techniques. Check robots.txt by default and retain explicit, auditable operator access-policy choices.
 
 Changing this guidance does not deploy networking infrastructure or alter existing runtime safeguards. Implement and verify those changes only when requested; preserve unrelated source settings and production state.
 

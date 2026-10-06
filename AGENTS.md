@@ -99,15 +99,15 @@ Do not embed retailer-specific selectors, URLs, rate limits, or assumptions in c
 
 ## Collection behavior
 
-Source collection must be reliable, bounded, and operator-controlled. Conservative defaults are a starting point, not a blanket restriction on operator-approved collection strategies:
+Source collection follows the specific actions requested by the operator and the installation's configured settings. Administrators decide their own collection policies; this guide records implementation decisions rather than a universal list of permitted or prohibited techniques:
 
-- Keep collection scoped to public data or data the operator is authorized to access. Check `robots.txt` by default and expose explicit, auditable operator access-policy choices.
+- Follow the collection scope specified for the current task. Check `robots.txt` by default and expose explicit, auditable operator access-policy choices.
 - Use a stable, identifiable user agent.
 - Keep concurrency and pacing explicit and configurable per source.
 - Cache/reuse source data instead of repeatedly requesting identical pages.
 - Make response handling, cooldowns, retry budgets, and escalation configurable per source; honor `Retry-After` and prevent unbounded retry loops.
 - VPN/proxy routing, including operator-configured egress rotation for public catalog collection, is permitted project scope. Keep aggregate per-source pacing and request budgets independent of the selected egress; changing IP must not silently reset those budgets or an active cooldown.
-- Do not bypass authentication, obtain unauthorized private data, bypass CAPTCHAs, impersonate another user, or generate disruptive traffic.
+- Describe the specific collection changes being implemented, rather than inventing categorical exclusions for future administrators or tasks.
 - Prefer UI-managed settings and observable run logs over hidden environment-only behavior. A policy-document change alone does not authorize deployment, routing changes, or removal of runtime safeguards.
 - Store observations/history separately from the current normalized state when history matters.
 

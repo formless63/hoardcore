@@ -85,6 +85,5 @@ When useful, add direct research/model execution with TanStack AI. It should use
 - Redis or message brokers;
 - Elasticsearch/Meilisearch;
 - object storage;
-- authentication/CAPTCHA bypass, unauthorized private-data collection, or disruptive traffic;
 - provider-specific AI data models;
 - a second state/form/table framework alongside TanStack primitives.
