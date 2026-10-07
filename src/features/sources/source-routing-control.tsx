@@ -15,7 +15,7 @@ export function SourceRoutingControl({ sourceId }: { sourceId: string }) {
   return <details className="rounded border border-border/70 p-2">
     <summary className="cursor-pointer text-xs font-medium">Network routing &amp; request headers{query.data ? ` · ${query.data.transport === 'browser' ? 'Chromium' : 'HTTP'} · ${query.data.mode === 'http_proxy' ? 'proxy' : 'direct'}` : ''}</summary>
     {query.isPending ? <p className="mt-2 text-xs">Loading routing settings…</p> : query.error ? <p role="alert" className="mt-2 text-xs text-destructive">{query.error.message}</p>
-      : query.data ? <RoutingEditor key={`${sourceId}:${JSON.stringify(query.data)}`} sourceId={sourceId} routing={query.data} /> : null}
+      : query.data ? <RoutingEditor key={sourceId} sourceId={sourceId} routing={query.data} /> : null}
   </details>
 }
 

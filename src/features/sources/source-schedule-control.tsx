@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { useServerFn } from '@tanstack/react-start'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
@@ -9,6 +10,7 @@ import { describeCron, EXAMPLE_SCHEDULE_CRON, formatScheduledDate, validateColle
 
 export function SourceScheduleControl({ source }: { source: CatalogSourceSummary }) {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const saveSchedule = useServerFn(updateSourceSchedule)
   const [enabled, setEnabled] = useState(source.collectionEnabled)
   const [cron, setCron] = useState(source.scheduleCron ?? '')
@@ -16,16 +18,21 @@ export function SourceScheduleControl({ source }: { source: CatalogSourceSummary
   const [requestLimit, setRequestLimit] = useState(source.scheduleRequestLimit)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
   const timeZoneListId = `schedule-timezones-${source.id}`
   const cronError = useMemo(() => cron ? validateCollectionCron(cron, timeZone) : null, [cron, timeZone])
   const changed = enabled !== source.collectionEnabled || cron !== (source.scheduleCron ?? '') || timeZone !== source.scheduleTimezone || requestLimit !== source.scheduleRequestLimit || source.legacyScheduleHours !== null
 
   async function save() {
     if (busy || !changed || cronError) return
-    setBusy(true); setError(null)
+    setBusy(true); setError(null); setMessage(null)
     try {
       await saveSchedule({ data: { sourceId: source.id, collectionEnabled: enabled, scheduleCron: cron || null, scheduleTimezone: timeZone, scheduleRequestLimit: requestLimit } })
-      await router.invalidate({ sync: true })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['source-safety', source.id] }),
+        router.invalidate({ sync: true }),
+      ])
+      setMessage('Collection settings and schedule saved.')
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not save schedule') }
     finally { setBusy(false) }
   }
@@ -49,5 +56,6 @@ export function SourceScheduleControl({ source }: { source: CatalogSourceSummary
     </div>
     {cronError ? <span role="alert" className="text-destructive lg:col-span-5">{cronError}</span> : null}
     {error ? <span role="alert" className="text-destructive lg:col-span-5">{error}</span> : null}
+    {message ? <span role="status" className="lg:col-span-5">{message}</span> : null}
   </div>
 }

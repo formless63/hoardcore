@@ -90,6 +90,13 @@ pnpm check
 Database integration tests run when `TEST_DATABASE_URL` points at an already-migrated test
 database. CI provisions PostgreSQL 18, applies migrations, and enables these tests automatically.
 
+After `pnpm build`, run `TEST_DATABASE_URL=... pnpm test:ui:panel` against an isolated,
+migrated test database (never production) with Playwright Chromium installed. It creates
+and cleans up its own fixtures, checks source-save feedback, immediate collection-toggle
+updates, navigation/sign-out, and expanded mobile layouts in light and dark mode. It
+starts a local app with catalog/photo workers disabled and makes no source requests.
+Screenshots are saved under `/tmp/hoardcore-panel-verification`.
+
 Source HTTP routing and catalog headers can be configured in Sources → Network routing & request headers. Each source
 can use direct connections or an authenticated HTTP CONNECT proxy with an
 encrypted password. Proxy failures do not fall back to direct connections;

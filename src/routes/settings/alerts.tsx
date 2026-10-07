@@ -5,6 +5,7 @@ import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { getNotificationSettings, listAlertSubscriptions, saveNotificationSettings, saveSavedViewAlertPreference, saveWatchedAlertPreference } from '~/features/alerts/alerts.functions'
 import { SettingsLoadError, SettingsPending } from '~/features/settings/settings-load-state'
+import { saveAlertRuleWithFeedback, type AlertRuleSaveFeedback } from './-alert-rule-save-feedback'
 
 export const Route = createFileRoute('/settings/alerts')({
   loader: async () => ({ settings: await getNotificationSettings(), subscriptions: await listAlertSubscriptions() }),
@@ -52,7 +53,13 @@ const eventLabels = { new_match: 'New match', price_change: 'Price', availabilit
 type EventType = keyof typeof eventLabels
 function AlertRule({ label, enabled: initialEnabled, eventTypes: initialTypes, onSave }: { label: string; enabled: boolean; eventTypes: EventType[]; onSave: (enabled: boolean, eventTypes: EventType[]) => Promise<unknown> }) {
   const [enabled, setEnabled] = useState(initialEnabled); const [types, setTypes] = useState<EventType[]>(initialTypes); const [busy, setBusy] = useState(false)
-  function toggleType(type: EventType) { setTypes((current) => current.includes(type) ? current.filter((value) => value !== type) : [...current, type]) }
-  async function saveRule() { if (!types.length) return; setBusy(true); try { await onSave(enabled, types) } finally { setBusy(false) } }
-  return <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-2"><span className="min-w-40 flex-1 truncate" title={label}>{label}</span><label className="flex items-center gap-1"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} /> Alert</label>{(Object.keys(eventLabels) as EventType[]).map((type) => <label key={type} className="flex items-center gap-1 text-muted-foreground"><input type="checkbox" checked={types.includes(type)} onChange={() => toggleType(type)} /> {eventLabels[type]}</label>)}<button type="button" className="text-primary underline disabled:opacity-50" disabled={busy || !types.length} onClick={() => void saveRule()}>{busy ? 'Saving…' : 'Save'}</button></div>
+  const [feedback, setFeedback] = useState<AlertRuleSaveFeedback>()
+  function toggleType(type: EventType) { setFeedback(undefined); setTypes((current) => current.includes(type) ? current.filter((value) => value !== type) : [...current, type]) }
+  async function saveRule() {
+    if (busy || !types.length) return
+    setBusy(true); setFeedback(undefined)
+    try { setFeedback(await saveAlertRuleWithFeedback(() => onSave(enabled, types))) }
+    finally { setBusy(false) }
+  }
+  return <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-2"><span className="min-w-40 flex-1 truncate" title={label}>{label}</span><label className="flex items-center gap-1"><input type="checkbox" disabled={busy} checked={enabled} onChange={(event) => { setFeedback(undefined); setEnabled(event.target.checked) }} /> Alert</label>{(Object.keys(eventLabels) as EventType[]).map((type) => <label key={type} className="flex items-center gap-1 text-muted-foreground"><input type="checkbox" disabled={busy} checked={types.includes(type)} onChange={() => toggleType(type)} /> {eventLabels[type]}</label>)}<button type="button" className="text-primary underline disabled:opacity-50" disabled={busy || !types.length} onClick={() => void saveRule()}>{busy ? 'Saving…' : 'Save'}</button><span className="w-full text-muted-foreground" role="status" aria-atomic="true">{feedback && !feedback.error ? `${label}: ${feedback.message}` : null}</span><span className="w-full text-destructive" role="alert" aria-atomic="true">{feedback?.error ? `${label}: ${feedback.message}` : null}</span></div>
 }

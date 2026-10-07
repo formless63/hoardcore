@@ -83,11 +83,19 @@ function SourceControls({ source, run, mediaRun, defaultRequestLimit, mediaCaptu
   const state = query.data?.state
   const blocked = !source.collectionEnabled || !query.data?.collectionEnabled || Boolean(state?.paused || state?.blockedUntil && state.blockedUntil > new Date())
   const scanInterval = Boolean(state?.lastScanAt && query.data && state.lastScanAt.getTime() + query.data.policy.minimumScanHours * 3_600_000 > Date.now())
+  const disabledReason = !source.collectionEnabled ? 'Collection is disabled. Enable it under Schedule.'
+    : query.isPending ? 'Loading collection settings…'
+    : !query.data ? 'Could not load collection settings. Check Response safety for details.'
+    : !query.data.collectionEnabled ? 'Collection is disabled. Enable it under Schedule.'
+    : state?.paused ? 'Collection is paused for review. Open Response safety to resume or release the cooldown.'
+    : state?.blockedUntil && state.blockedUntil > new Date() ? `Cooling down until ${state.blockedUntil.toLocaleString()}. Open Response safety for manual release.`
+    : scanInterval && state?.lastScanAt ? `The configured scan interval ends ${new Date(state.lastScanAt.getTime() + query.data.policy.minimumScanHours * 3_600_000).toLocaleString()}.`
+    : undefined
   return <div className="min-w-0 space-y-2">
     <SourceSafetyControl sourceId={source.id} query={query} />
     <SourceRoutingControl sourceId={source.id} />
     <section className="rounded border border-border/70 p-2" aria-label={`Collection controls for ${source.displayName}`}>
-      <SourceRunControl sourceId={source.id} run={run} defaultRequestLimit={defaultRequestLimit} disabled={blocked || scanInterval} />
+      <SourceRunControl sourceId={source.id} run={run} defaultRequestLimit={defaultRequestLimit} disabled={blocked || scanInterval} disabledReason={disabledReason} />
     </section>
     <details className="rounded border border-border/70 p-2"><summary className="cursor-pointer text-xs font-medium">Schedule{source.nextRunAt ? ` · next ${formatScheduledDate(source.nextRunAt, source.scheduleTimezone)}` : ' · manual only'}</summary><div className="mt-2"><SourceScheduleControl source={source} /></div></details>
     <details className="rounded border border-border/70 p-2"><summary className="cursor-pointer text-xs font-medium">Photo capture</summary><div className="mt-2"><MediaRunControl sourceId={source.id} enabled={mediaCaptureEnabled} disabled={blocked} run={mediaRun} /></div></details>

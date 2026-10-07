@@ -23,7 +23,7 @@ const labels: Record<CollectionRun['status'], string> = {
   queued: 'Queued', running: 'Running', succeeded: 'Succeeded', partial: 'Partial', not_modified: 'Not modified', failed: 'Failed',
 }
 
-export function SourceRunControl({ sourceId, run, defaultRequestLimit = 3, disabled = false }: { sourceId: string; run?: CollectionRun; defaultRequestLimit?: number; disabled?: boolean }) {
+export function SourceRunControl({ sourceId, run, defaultRequestLimit = 3, disabled = false, disabledReason }: { sourceId: string; run?: CollectionRun; defaultRequestLimit?: number; disabled?: boolean; disabledReason?: string }) {
   const runCollection = useServerFn(enqueueCatalogCollection)
   const router = useRouter()
   const navigate = useNavigate()
@@ -61,6 +61,7 @@ export function SourceRunControl({ sourceId, run, defaultRequestLimit = 3, disab
       <Button disabled={disabled || busy || requestLimit < 2 || requestLimit > 20 || !Number.isInteger(requestLimit) || !Number.isInteger(interPageWaitMinutes) || interPageWaitMinutes < 0 || interPageWaitMinutes > 5 || run?.status === 'queued' || run?.status === 'running'} size="small" onClick={() => void start(true)}>Run &amp; watch</Button>
     </div>
     {(run?.status === 'failed' || run?.status === 'partial') && run.error ? <p className="text-destructive xl:col-span-4" role="alert">{run.error}</p> : null}
+    {disabled && disabledReason ? <p className="text-muted-foreground xl:col-span-4" role="status">{disabledReason}</p> : null}
     {error ? <p className="text-destructive xl:col-span-4" role="alert">{error}</p> : null}
   </div>
 }

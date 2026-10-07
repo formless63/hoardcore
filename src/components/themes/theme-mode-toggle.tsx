@@ -29,7 +29,10 @@ export function ThemeModeToggle() {
     transitionDocument.startViewTransition(() => setTheme(nextTheme))
   }
 
-  const switchingTo = resolvedTheme === 'dark' ? 'light' : 'dark'
+  // The server cannot read the stored mode. Keep the first client render
+  // identical to SSR, then show the resolved mode once mounted.
+  const isDark = mounted && resolvedTheme === 'dark'
+  const switchingTo = isDark ? 'light' : 'dark'
 
   return (
     <button
@@ -40,7 +43,7 @@ export function ThemeModeToggle() {
       onClick={toggleMode}
       className="inline-flex size-8 items-center justify-center rounded-md border border-input bg-background text-foreground shadow-xs transition hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:size-9"
     >
-      {resolvedTheme === 'dark' ? <SunIcon /> : <MoonIcon />}
+      {isDark ? <SunIcon /> : <MoonIcon />}
     </button>
   )
 }

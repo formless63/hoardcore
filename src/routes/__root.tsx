@@ -7,9 +7,11 @@ import {
   Outlet,
   Scripts,
   createRootRouteWithContext,
+  useRouter,
   useRouterState,
 } from '@tanstack/react-router'
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { signOutAndNavigate } from './-sign-out-navigation'
 import { ActiveThemeProvider } from '~/components/themes/active-theme'
 import { ThemeControls } from '~/components/themes/theme-controls'
 import { DEFAULT_THEME, THEME_BOOTSTRAP_SCRIPT } from '~/components/themes/theme.config'
@@ -44,7 +46,31 @@ export const Route = createRootRouteWithContext<{
 
 function RootDocument({ children }: { children: ReactNode }) {
   const session = authClient.useSession()
+  const router = useRouter()
+  const [signOutPending, setSignOutPending] = useState(false)
+  const [signedOut, setSignedOut] = useState(false)
+  const [signOutError, setSignOutError] = useState('')
   const isLoginPage = useRouterState({ select: (state) => state.location.pathname === '/login' })
+  const isResearchPage = useRouterState({ select: (state) => state.location.pathname.startsWith('/research/') })
+  useEffect(() => { if (isLoginPage) setSignedOut(false) }, [isLoginPage])
+  async function handleSignOut() {
+    if (signOutPending) return
+    setSignOutPending(true)
+    setSignOutError('')
+    let didSignOut = false
+    try {
+      await signOutAndNavigate({
+        signOut: () => authClient.signOut(),
+        queryClient: router.options.context.queryClient,
+        router,
+        onSignedOut: () => { didSignOut = true; setSignedOut(true) },
+      })
+    } catch {
+      setSignOutError(didSignOut ? 'Signed out, but navigation failed. Continue to sign in below.' : 'Unable to sign out. Please try again.')
+    } finally {
+      setSignOutPending(false)
+    }
+  }
   return (
     <html lang="en" data-theme={DEFAULT_THEME} suppressHydrationWarning>
       <head>
@@ -103,6 +129,8 @@ function RootDocument({ children }: { children: ReactNode }) {
                   <Link to="/opportunities" className="shrink-0 rounded-sm border border-transparent px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-border hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:border-primary/40 [&[data-status=active]]:bg-primary/10 [&[data-status=active]]:text-foreground">Opportunities</Link>
                   <Link
                     to="/research/preview"
+                    data-status={isResearchPage ? 'active' : undefined}
+                    aria-current={isResearchPage ? 'location' : undefined}
                     className="shrink-0 rounded-sm border border-transparent px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-border hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:border-primary/40 [&[data-status=active]]:bg-primary/10 [&[data-status=active]]:text-foreground"
                   >
                     Research
@@ -111,8 +139,8 @@ function RootDocument({ children }: { children: ReactNode }) {
                 </nav>
                 <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
                   {session.data ? (
-                    <button aria-label="Sign out" title="Sign out" className="rounded-sm px-1 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:px-2" onClick={() => void authClient.signOut()} type="button">
-                      <span className="sm:hidden">Exit</span><span className="hidden sm:inline">Sign out</span>
+                    <button aria-label="Sign out" title="Sign out" disabled={signOutPending} className="rounded-sm px-1 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 sm:px-2" onClick={() => void handleSignOut()} type="button">
+                      {signOutPending ? 'Signing out…' : <><span className="sm:hidden">Exit</span><span className="hidden sm:inline">Sign out</span></>}
                     </button>
                   ) : (
                     <Link className="rounded-sm px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring" to="/login">Sign in</Link>
@@ -121,7 +149,8 @@ function RootDocument({ children }: { children: ReactNode }) {
                 </div>
               </div>
             </header> : null}
-            {children}
+            {signOutError ? <p role="alert" className="px-3 py-2 text-sm text-destructive">{signOutError}</p> : null}
+            {signedOut && !isLoginPage ? <main id="main-content" className="px-3 py-3 text-sm text-muted-foreground"><p role="status">Signing out…</p><Link to="/login" replace className="text-primary underline">Continue to sign in</Link></main> : children}
           </ActiveThemeProvider>
         </ThemeProvider>
         <Scripts />

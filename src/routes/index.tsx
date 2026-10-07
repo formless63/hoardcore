@@ -40,8 +40,8 @@ function Overview() {
   const maxActivity = Math.max(1, ...data.activity.map((item) => item.observations))
 
   return <main className="w-full space-y-3 px-2 py-3 sm:px-3" id="main-content">
-    <h1 className="sr-only">Inventory overview</h1>
-    <div className="flex flex-wrap items-center justify-end gap-2">
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <h1 className="text-base font-semibold text-foreground">Inventory overview</h1>
       <div className="inline-flex rounded-md border border-border bg-card p-0.5 text-xs" aria-label="Change period">
         {[7, 30].map((period) => <Link key={period} to="/" search={{ days: period as 7 | 30 }} className={`rounded px-3 py-1.5 ${days === period ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>Last {period} days</Link>)}
       </div>

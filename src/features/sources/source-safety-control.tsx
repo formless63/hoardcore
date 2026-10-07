@@ -26,7 +26,7 @@ export function useSourceSafety(sourceId: string) {
 export function SourceSafetyControl({ sourceId, query }: { sourceId: string; query: ReturnType<typeof useSourceSafety> }) {
   return <details className="rounded border border-border/70 p-2">
     <summary className="cursor-pointer text-xs font-medium">Response safety{query.data?.state?.paused ? ' · paused for review' : query.data?.state?.blockedUntil && query.data.state.blockedUntil > new Date() ? ' · cooling down' : ''}</summary>
-    {query.isPending ? <p className="mt-2 text-xs">Loading safety settings…</p> : query.error ? <p role="alert" className="mt-2 text-xs text-destructive">{query.error.message}</p> : query.data ? <SafetyEditor key={`${sourceId}:${JSON.stringify(query.data.policy)}:${query.data.eventTypes.join(',')}`} sourceId={sourceId} safety={query.data} /> : null}
+    {query.isPending ? <p className="mt-2 text-xs">Loading safety settings…</p> : query.error ? <p role="alert" className="mt-2 text-xs text-destructive">{query.error.message}</p> : query.data ? <SafetyEditor key={sourceId} sourceId={sourceId} safety={query.data} /> : null}
   </details>
 }
 
