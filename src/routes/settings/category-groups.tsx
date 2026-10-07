@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
+import { createFileRoute, useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import { useState } from 'react'
 import { Button } from '~/components/ui/button'
@@ -66,7 +66,7 @@ function CategoryGroupsSettings() {
   }
 
   return <main className="w-full px-2 py-3 sm:px-3" id="main-content">
-    <div className="mb-3 flex items-center gap-3"><h1 className="text-base font-semibold">Category mappings</h1><Link className="text-xs text-primary underline" to="/settings">Settings</Link></div>
+    <h1 className="mb-3 text-base font-semibold">Catalog organization</h1>
     <p className="mb-3 max-w-3xl text-xs text-muted-foreground">Raw source categories stay unchanged. These installation-wide mappings only control internal category filters and saved-view alerts. Starter groups remain the fallback unless an override is saved.</p>
     {message ? <p className="mb-3 text-xs text-muted-foreground" role="status">{message}</p> : null}
     <section className="border border-border bg-card">

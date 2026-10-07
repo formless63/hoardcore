@@ -34,10 +34,10 @@ function AlertSettingsPage() {
     finally { setBusy(false) }
   }
   return <main className="w-full px-2 py-3 sm:px-3" id="main-content">
-    <div className="mb-3 flex items-center gap-3"><Link to="/settings" className="text-xs text-primary underline">← Settings</Link><h1 className="text-sm font-medium">Notifications</h1></div>
+    <h1 className="mb-3 text-base font-semibold">Notifications</h1>
     <form className="max-w-xl rounded border border-border bg-card p-3 text-xs" onSubmit={(event) => void submit(event)}>
       <label className="flex items-center gap-2"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} /><span className="font-medium">Enable ntfy notifications</span></label>
-      <p className="mt-1 text-muted-foreground">Alerts cover your watched listings, saved listing views and subscribed source safety events. Configure source events in Sources → Response safety. Nothing is sent while this is disabled.</p>
+      <p className="mt-1 text-muted-foreground">Alerts cover your watched listings, saved listing views and subscribed source events. Choose source events under <Link to="/settings/sources" className="text-primary underline">Sources &amp; crawling → Response safety</Link>. Nothing is sent while this is disabled.</p>
       <label className="mt-4 block text-muted-foreground" htmlFor="ntfy-endpoint">Public HTTPS ntfy origin</label>
       <Input id="ntfy-endpoint" className="mt-1" value={endpoint} onChange={(event) => setEndpoint(event.target.value)} placeholder="https://ntfy.example.com" />
       <label className="mt-3 block text-muted-foreground" htmlFor="ntfy-topic">Topic</label>

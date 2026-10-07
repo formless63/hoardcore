@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
+import { createFileRoute, useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import { useState, type FormEvent } from 'react'
 import { Button } from '~/components/ui/button'
@@ -48,7 +48,7 @@ function LoxepSettingsPage() {
 
   const origin = typeof window === 'undefined' ? '' : window.location.origin
   return <main className="w-full px-2 py-3 sm:px-3" id="main-content">
-    <div className="flex items-center gap-3"><h1 className="text-base font-semibold">Loxep connections</h1><Link to="/settings" className="text-xs text-primary underline">Back to settings</Link></div>
+    <h1 className="text-base font-semibold">Loxep integration</h1>
     <p className="mt-1 max-w-2xl text-xs text-muted-foreground">Connect Hoardcore to a Loxep installation. The outbound bearer token is encrypted in the database; the callback token is shown once for a future Loxep outcome webhook.</p>
     <form className="mt-4 max-w-xl rounded-md border border-border bg-card p-4" onSubmit={(event) => void submit(event)}>
       <h2 className="text-sm font-semibold">Add Loxep</h2>

@@ -97,7 +97,12 @@ updates, navigation/sign-out, and expanded mobile layouts in light and dark mode
 starts a local app with catalog/photo workers disabled and makes no source requests.
 Screenshots are saved under `/tmp/hoardcore-panel-verification`.
 
-Source HTTP routing and catalog headers can be configured in Sources → Network routing & request headers. Each source
+Settings has a shared navigation workspace for general defaults, source configuration,
+notifications, catalog organization, research API tokens, and Loxep connections. Sources
+is focused on running and monitoring collections; its Configure source links open the
+matching source under Settings → Sources & crawling.
+
+Source HTTP routing and catalog headers can be configured in Settings → Sources & crawling → Network routing & request headers. Each source
 can use direct connections or an authenticated HTTP CONNECT proxy with an
 encrypted password. Proxy failures do not fall back to direct connections;
 changing routes does not reset source cooldowns or request budgets. The same UI

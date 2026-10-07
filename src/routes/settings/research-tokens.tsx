@@ -39,7 +39,7 @@ function ResearchTokensPage() {
     finally { setBusy(false) }
   }
   return <main className="w-full px-2 py-3 sm:px-3" id="main-content">
-    <h1 className="text-sm font-medium">Research API tokens</h1>
+    <h1 className="text-base font-semibold">Research API tokens</h1>
     <p className="mt-1 text-xs text-muted-foreground">Issue a 30-day, research-write-only bearer token for a coding agent. Copy it now; only its hash is stored.</p>
     <div className="mt-3 flex flex-wrap gap-2"><input aria-label="Token name" value={name} maxLength={80} onChange={(event) => setName(event.target.value)} placeholder="Agent name" className="h-8 w-56 rounded border border-border bg-background px-2 text-xs" /><button type="button" disabled={busy || !name.trim()} onClick={() => void issue()} className="h-8 rounded bg-primary px-2 text-xs text-primary-foreground disabled:opacity-40">Create token</button></div>
     {revealed ? <div className="mt-3 rounded border border-border bg-card p-2 text-xs"><p>Copy this token now. It will not be shown again.</p><code className="mt-1 block break-all select-all rounded bg-muted p-2">{revealed}</code><button type="button" className="mt-1 text-primary underline" onClick={() => void navigator.clipboard.writeText(revealed)}>Copy</button></div> : null}

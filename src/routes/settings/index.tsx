@@ -5,6 +5,7 @@ import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { getOperatorSettings, saveOperatorSettings } from '~/features/settings/settings.functions'
 import { SettingsLoadError, SettingsPending } from '~/features/settings/settings-load-state'
+import { settingsSections } from '~/features/settings/settings-navigation'
 
 export const Route = createFileRoute('/settings/')({
   loader: () => getOperatorSettings(),
@@ -37,11 +38,14 @@ function SettingsPage() {
 
   return (
     <main className="w-full px-2 py-3 sm:px-3" id="main-content">
-      <h1 className="mb-3 text-base font-semibold text-foreground">Settings</h1>
-      <Link to="/settings/alerts" className="mb-3 inline-block text-xs text-primary underline">Notification settings and alert rules</Link>
-      <Link to="/settings/research-tokens" className="mb-3 ml-3 inline-block text-xs text-primary underline">Research API tokens</Link>
-      <Link to="/settings/category-groups" className="mb-3 ml-3 inline-block text-xs text-primary underline">Category mappings</Link>
-      <Link to="/settings/loxep" className="mb-3 ml-3 inline-block text-xs text-primary underline">Loxep connections</Link>
+      <h1 className="text-base font-semibold text-foreground">General settings</h1>
+      <p className="mt-1 text-xs text-muted-foreground">Manage configuration here. Use Sources to run collections and follow their progress.</p>
+      <section aria-label="Settings sections" className="my-4 grid max-w-5xl gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        {settingsSections.filter(section => section.to !== '/settings').map(section => <Link key={section.to} to={section.to} className="rounded border border-border bg-card p-3 hover:border-primary/50 focus-visible:outline-2 focus-visible:outline-ring">
+          <h2 className="text-sm font-medium text-foreground">{section.label} <span aria-hidden="true">→</span></h2>
+          <p className="mt-1 text-xs text-muted-foreground">{section.description}</p>
+        </Link>)}
+      </section>
       <form className="max-w-xl rounded-md border border-border bg-card p-4" onSubmit={(event) => void submit(event)}>
         <h2 className="text-sm font-semibold text-foreground">Collection defaults</h2>
         <label className="mt-3 block text-xs text-muted-foreground" htmlFor="default-request-limit">Default request ceiling</label>

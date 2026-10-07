@@ -27,6 +27,7 @@ export function SourceList({
   defaultRequestLimit = 3,
   mediaCaptureEnabled = false,
   latestMediaRuns = {},
+  mode = 'operations',
 }: {
   sources: CatalogSourceSummary[]
   emptyDescription?: string
@@ -34,8 +35,8 @@ export function SourceList({
   defaultRequestLimit?: number
   mediaCaptureEnabled?: boolean
   latestMediaRuns?: Record<string, Awaited<ReturnType<typeof listMediaCaptureRuns>>[number] | undefined>
+  mode?: 'operations' | 'settings'
 }) {
-  const router = useRouter()
   if (sources.length === 0) {
     return (
       <EmptyState
@@ -62,14 +63,24 @@ export function SourceList({
                 <SourceStatusBadge status={source.status} />
               </div><p className="mt-1 truncate text-sm text-muted-foreground" title={source.summary}>{source.summary}</p></div>
               <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground"><span>Added {createdDateFormatter.format(new Date(source.createdAt))}</span>{source.currency ? <span>{source.currency}</span> : null}{source.stockCardsEnabled ? <span>Stock supplement on</span> : null}</div>
-              {source.moduleId === 'shopify' ? <SourceCatalogOptionsControl source={source} onSaved={() => { void router.invalidate({ sync: true }) }} /> : null}
             </div>
-            <SourceControls source={source} run={latestRuns[source.id]} mediaRun={latestMediaRuns[source.id]} defaultRequestLimit={defaultRequestLimit} mediaCaptureEnabled={mediaCaptureEnabled} />
+            {mode === 'settings' ? <SourceConfiguration source={source} /> : <SourceControls source={source} run={latestRuns[source.id]} mediaRun={latestMediaRuns[source.id]} defaultRequestLimit={defaultRequestLimit} mediaCaptureEnabled={mediaCaptureEnabled} />}
           </article>
         </li>
       ))}
     </ul>
   )
+}
+
+function SourceConfiguration({ source }: { source: CatalogSourceSummary }) {
+  const router = useRouter()
+  const query = useSourceSafety(source.id)
+  return <div className="min-w-0 space-y-2">
+    <details open className="rounded border border-border/70 p-2"><summary className="cursor-pointer text-xs font-medium">Collection &amp; schedule{source.nextRunAt ? ` · next ${formatScheduledDate(source.nextRunAt, source.scheduleTimezone)}` : ' · manual only'}</summary><div className="mt-2"><SourceScheduleControl source={source} /></div></details>
+    <SourceRoutingControl sourceId={source.id} />
+    <SourceSafetyControl sourceId={source.id} query={query} />
+    {source.moduleId === 'shopify' ? <SourceCatalogOptionsControl source={source} onSaved={() => { void router.invalidate({ sync: true }) }} /> : null}
+  </div>
 }
 
 function SourceControls({ source, run, mediaRun, defaultRequestLimit, mediaCaptureEnabled }: {
@@ -83,21 +94,22 @@ function SourceControls({ source, run, mediaRun, defaultRequestLimit, mediaCaptu
   const state = query.data?.state
   const blocked = !source.collectionEnabled || !query.data?.collectionEnabled || Boolean(state?.paused || state?.blockedUntil && state.blockedUntil > new Date())
   const scanInterval = Boolean(state?.lastScanAt && query.data && state.lastScanAt.getTime() + query.data.policy.minimumScanHours * 3_600_000 > Date.now())
-  const disabledReason = !source.collectionEnabled ? 'Collection is disabled. Enable it under Schedule.'
+  const disabledReason = !source.collectionEnabled ? 'Collection is disabled. Enable it in source settings.'
     : query.isPending ? 'Loading collection settings…'
-    : !query.data ? 'Could not load collection settings. Check Response safety for details.'
-    : !query.data.collectionEnabled ? 'Collection is disabled. Enable it under Schedule.'
-    : state?.paused ? 'Collection is paused for review. Open Response safety to resume or release the cooldown.'
-    : state?.blockedUntil && state.blockedUntil > new Date() ? `Cooling down until ${state.blockedUntil.toLocaleString()}. Open Response safety for manual release.`
+    : !query.data ? 'Could not load collection settings. Open source settings for details.'
+    : !query.data.collectionEnabled ? 'Collection is disabled. Enable it in source settings.'
+    : state?.paused ? 'Collection is paused for review. Open source settings to resume or release the cooldown.'
+    : state?.blockedUntil && state.blockedUntil > new Date() ? `Cooling down until ${state.blockedUntil.toLocaleString()}. Open source settings for manual release.`
     : scanInterval && state?.lastScanAt ? `The configured scan interval ends ${new Date(state.lastScanAt.getTime() + query.data.policy.minimumScanHours * 3_600_000).toLocaleString()}.`
     : undefined
   return <div className="min-w-0 space-y-2">
-    <SourceSafetyControl sourceId={source.id} query={query} />
-    <SourceRoutingControl sourceId={source.id} />
+    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+      <span className="text-muted-foreground">{source.collectionEnabled ? 'Collection enabled' : 'Collection disabled'} · {source.nextRunAt ? `Next ${formatScheduledDate(source.nextRunAt, source.scheduleTimezone)}` : 'Manual only'}</span>
+      <Link to="/settings/sources" search={{ sourceId: source.id }} className="font-medium text-primary underline">Configure source</Link>
+    </div>
     <section className="rounded border border-border/70 p-2" aria-label={`Collection controls for ${source.displayName}`}>
       <SourceRunControl sourceId={source.id} run={run} defaultRequestLimit={defaultRequestLimit} disabled={blocked || scanInterval} disabledReason={disabledReason} />
     </section>
-    <details className="rounded border border-border/70 p-2"><summary className="cursor-pointer text-xs font-medium">Schedule{source.nextRunAt ? ` · next ${formatScheduledDate(source.nextRunAt, source.scheduleTimezone)}` : ' · manual only'}</summary><div className="mt-2"><SourceScheduleControl source={source} /></div></details>
     <details className="rounded border border-border/70 p-2"><summary className="cursor-pointer text-xs font-medium">Photo capture</summary><div className="mt-2"><MediaRunControl sourceId={source.id} enabled={mediaCaptureEnabled} disabled={blocked} run={mediaRun} /></div></details>
   </div>
 }

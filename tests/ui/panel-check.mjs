@@ -48,6 +48,9 @@ try {
   await mkdir(`/tmp/hoardcore-panel-${label}`,{recursive:true})
   const results=[]
   await page.goto('http://127.0.0.1:3397/sources',{waitUntil:'networkidle'})
+  await expect(page.getByText(/Network routing & request headers/)).toHaveCount(0)
+  await page.getByRole('link',{name:'Configure source',exact:true}).click()
+  await expect(page).toHaveURL(new RegExp(`/settings/sources.*${sourceId}`))
   await page.getByText(/Network routing & request headers/).click()
   const routingSave=page.getByRole('button',{name:'Save routing & headers',exact:true})
   await routingSave.evaluate(node=>{node.dataset.fixtureIdentity='retained'})
@@ -55,11 +58,12 @@ try {
   await routingSave.click()
   await expect(page.getByText('Routing and catalog headers saved.',{exact:false})).toBeVisible()
   assert.equal(await routingSave.getAttribute('data-fixture-identity'),'retained','Routing editor must not remount after save')
-  await page.getByText(/Schedule ·/).click()
   await page.getByLabel('Collection enabled',{exact:true}).check()
   await page.getByRole('button',{name:'Save',exact:true}).click()
   await expect(page.getByText('Collection settings and schedule saved.',{exact:true})).toBeVisible()
+  await page.getByRole('link',{name:'Run & monitor',exact:true}).click()
   await expect(page.getByRole('button',{name:'Run in background',exact:true})).toBeEnabled()
+  await page.getByRole('link',{name:'Configure source',exact:true}).click()
   await page.getByText(/Response safety/).first().click()
   const safetySave=page.getByRole('button',{name:'Save safety settings',exact:true})
   await safetySave.evaluate(node=>{node.dataset.fixtureIdentity='retained'})
@@ -67,13 +71,18 @@ try {
   await safetySave.click()
   await expect(page.getByText('Safety settings saved',{exact:true})).toBeVisible()
   assert.equal(await safetySave.getAttribute('data-fixture-identity'),'retained','Response editor must not remount after save')
-  for(const [route,name] of [['/','overview'],['/listings','listings'],['/sources','sources'],['/settings','settings'],['/research/manual','research'],['/opportunities','opportunities'],['/watchlist','watchlist']]){
+  for(const [route,name] of [['/','overview'],['/listings','listings'],['/sources','sources'],['/settings','settings'],['/settings/sources','source-settings'],['/settings/alerts','notifications'],['/settings/category-groups','categories'],['/settings/research-tokens','research-api'],['/settings/loxep','loxep'],['/research/manual','research'],['/opportunities','opportunities'],['/watchlist','watchlist']]){
     await page.setViewportSize({width:1440,height:1050})
     await page.goto('http://127.0.0.1:3397'+route,{waitUntil:'networkidle'})
     if(name==='research')await expect(page.getByRole('link',{name:'Research',exact:true})).toHaveAttribute('aria-current','location')
+    if(route.startsWith('/settings')){
+      const navigation=page.getByRole('navigation',{name:'Settings navigation'})
+      await expect(navigation.getByRole('link')).toHaveCount(6)
+      await expect(navigation.locator('[data-status="active"]')).toHaveCount(1)
+    }
     await page.screenshot({path:`/tmp/hoardcore-panel-${label}/${name}-desktop.png`,fullPage:true})
     results.push({route,title:await page.title(),headings:await page.locator('h1,h2').allTextContents(),overflow:await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)})
-    if(['listings','sources','settings'].includes(name)){
+    if(['listings','sources','settings','source-settings','notifications','categories','research-api','loxep'].includes(name)){
       await page.setViewportSize({width:390,height:844})
       await page.screenshot({path:`/tmp/hoardcore-panel-${label}/${name}-mobile.png`,fullPage:true})
       results.push({route,mobile:true,overflow:await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)})
@@ -86,7 +95,7 @@ try {
     results.push({route:'/listings',expanded:true,width,overflow:await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)})
     await page.screenshot({path:`/tmp/hoardcore-panel-${label}/listings-expanded-${width}.png`,fullPage:true})
   }
-  await page.goto('http://127.0.0.1:3397/sources',{waitUntil:'networkidle'})
+  await page.goto('http://127.0.0.1:3397/settings/sources',{waitUntil:'networkidle'})
   await page.getByText(/Network routing & request headers/).click()
   await page.getByText(/Response safety/,{exact:false}).first().click()
   await page.setViewportSize({width:390,height:844})
