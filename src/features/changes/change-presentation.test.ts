@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { formatChangePrice, priceMovement } from './change-presentation'
+import { changeMarkers, formatChangePrice, movementTone, priceMovement } from './change-presentation'
 const row={ beforePresent:true,afterPresent:true,beforePrice:'100',afterPrice:'80',beforeCurrency:'USD',afterCurrency:'USD',delta:'-20',percent:'-20' }
 describe('price change explanations',()=>{
+  it('uses semantic tones and keeps overlapping event meanings visible without redundant price labels',()=>{
+    expect(movementTone({kinds:['price_drop']})).toBe('text-change-drop')
+    expect(movementTone({kinds:['price_increase']})).toBe('text-change-increase')
+    expect(movementTone({kinds:['missing']})).toBe('text-change-removed')
+    expect(changeMarkers(['price_changed','price_drop','stock_changed'])).toBe('📉 Price drop · 📦 Stock changed')
+    expect(changeMarkers(['new'])).toBe('✨ New listing')
+  })
   it('formats prices and explains direction and percentage',()=>{
     expect(formatChangePrice('80',null)).toBe('$80.00 USD')
     expect(priceMovement(row)).toEqual({label:'↓ Down $20.00 USD',detail:'20.00% lower'})

@@ -118,6 +118,9 @@ known values, labeling inherited values and retaining original price evidence li
 timestamps. Last-known quantities are not presented as newly measured stock. First
 appearances, removals, returns, unchanged prices, and actual price movements have distinct
 explanations. Older runs without an observation timestamp use their evidence capture time.
+Changes shows representative cached listing thumbnails, with green price drops,
+red increases, amber removals, and event text/icons instead of a separate badge column.
+Thumbnails are current cached media, not historical image reconstructions.
 
 Source HTTP routing and catalog headers can be configured in Settings → Sources & crawling → Network routing & request headers. Each source
 can use direct connections or an authenticated HTTP CONNECT proxy with an

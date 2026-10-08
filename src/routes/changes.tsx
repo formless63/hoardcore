@@ -7,7 +7,8 @@ import { getChanges } from '~/features/changes/changes.functions'
 import { changesQueryOptions } from '~/features/changes/changes.queries'
 import { changesSearchSchema, changeKinds, changeLabels, type ChangesSearch } from '~/features/changes/changes.schemas'
 import { Button } from '~/components/ui/button'
-import { formatChangePrice, priceMovement } from '~/features/changes/change-presentation'
+import { changeMarkers, formatChangePrice, movementTone, priceMovement } from '~/features/changes/change-presentation'
+import { CachedListingImage } from '~/features/media/cached-listing-image'
 
 export const Route = createFileRoute('/changes')({
   validateSearch: changesSearchSchema,
@@ -33,18 +34,18 @@ function SnapshotValue({ row, side }: { row: ChangeRow; side: 'before'|'after' }
   if (present === null) return <div><p>No earlier history</p><p className="text-muted-foreground">First captured in this comparison</p></div>
   const price = row[`${side}Price`], currency = row[`${side}Currency`], at = row[`${side}PriceAt`], runId = row[`${side}ValueRunId`]
   return <div className="space-y-1">
-    <p className="font-medium">{present ? formatChangePrice(price,currency) : 'Absent from source'}</p>
+    <p className={`font-medium ${!present ? 'text-change-removed' : ''}`}>{present ? formatChangePrice(price,currency) : '📤 Absent from source'}</p>
     {!present && price !== null ? <p className="text-muted-foreground">Last known: {formatChangePrice(price,currency)}</p> : null}
     <p className="text-muted-foreground">{row[`${side}Carried`] || !present ? 'Last known value' : 'Recorded in this run'}{at ? ` · ${new Date(at).toISOString().replace('T',' ').slice(0,16)} UTC` : ''}{runId ? <> · <Link to="/runs/$runId" params={{ runId }} className="text-primary underline">Evidence</Link></> : null}</p>
     {present ? <p className="text-muted-foreground">{row[`${side}Available`] ? 'In stock' : 'Out of stock'} · {row[`${side}Quantity`] === null ? 'Quantity not captured' : `Qty ${row[`${side}Quantity`]}${row[`${side}QuantityCarried`] ? ' (last known; not measured in this run)' : ''}`}</p> : null}
   </div>
 }
 const columns = helper.columns([
-  helper.accessor('title', { header: 'Listing', cell: info => <div className="max-w-80 whitespace-normal"><Link to="/listings/$listingId" params={{ listingId: info.row.original.listingId }} className="font-medium text-primary hover:underline">{info.getValue()}</Link><p className="mt-1 text-muted-foreground">{info.row.original.sourceName}{info.row.original.sku ? ` · ${info.row.original.sku}` : ''}</p></div> }),
-  helper.accessor('kinds', { header: 'Changes', cell: info => <div className="flex max-w-60 flex-wrap gap-1">{info.getValue().filter(kind => kind !== 'price_changed' || !info.getValue().some(value => value === 'price_drop' || value === 'price_increase')).map(kind => <span key={kind} className="rounded border border-border bg-muted px-1.5 py-0.5">{changeLabels[kind as keyof typeof changeLabels] ?? kind}</span>)}</div> }),
+  helper.display({ id:'image',header:'Photo',cell:({row})=><Link to="/listings/$listingId" params={{listingId:row.original.listingId}} aria-label={`Open ${row.original.title}`}><CachedListingImage captureId={row.original.mediaCaptureId} alt="" className="flex size-14 items-center justify-center rounded border border-border bg-card object-contain text-[10px] text-muted-foreground" /></Link> }),
+  helper.accessor('title', { header: 'Listing', cell: info => <div className="max-w-80 whitespace-normal"><Link to="/listings/$listingId" params={{ listingId: info.row.original.listingId }} className={`font-medium hover:underline ${info.row.original.kinds.includes('missing') ? 'text-change-removed' : 'text-primary'}`}>{info.getValue()}</Link><p className="mt-1 text-muted-foreground">{info.row.original.sourceName}{info.row.original.sku ? ` · ${info.row.original.sku}` : ''}</p><p className={`mt-1 font-medium ${movementTone(info.row.original)}`}>{changeMarkers(info.row.original.kinds)}</p></div> }),
   helper.display({ id: 'before', header: 'Earlier snapshot', cell: ({ row }) => <SnapshotValue row={row.original} side="before" /> }),
   helper.display({ id: 'after', header: 'Later snapshot', cell: ({ row }) => <SnapshotValue row={row.original} side="after" /> }),
-  helper.display({ id: 'delta', header: 'Price movement', cell: ({ row: { original: r } }) => { const movement=priceMovement(r); return <><p className={r.delta !== null && Number(r.delta)<0 ? 'font-medium text-primary' : 'font-medium'}>{movement.label}</p><p className="text-muted-foreground">{movement.detail}</p></> } }),
+  helper.display({ id: 'delta', header: 'Price movement', cell: ({ row: { original: r } }) => { const movement=priceMovement(r); return <div className={movementTone(r)}><p className="font-medium">{movement.label}</p><p>{movement.detail}</p></div> } }),
   helper.display({ id: 'runs', header: 'Run evidence', cell: ({ row: { original: r } }) => <div className="space-y-1"><time dateTime={new Date(r.at).toISOString()}>{new Date(r.at).toISOString().replace('T',' ').slice(0,19)} UTC</time><p>{r.beforeRunId ? <><Link to="/runs/$runId" params={{ runId: r.beforeRunId }} className="text-primary underline">Before</Link> → </> : null}<Link to="/runs/$runId" params={{ runId: r.afterRunId }} className="text-primary underline">After</Link></p></div> }),
 ])
 const fieldClass = 'mt-1 h-9 w-full min-w-0 rounded border border-border bg-background px-2 text-xs text-foreground'

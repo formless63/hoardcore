@@ -30,6 +30,9 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-change-drop: var(--change-drop);
+  --color-change-increase: var(--change-increase);
+  --color-change-removed: var(--change-removed);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -59,12 +62,18 @@
   }
 
   html {
+    --change-drop: #15803d;
+    --change-increase: #b91c1c;
+    --change-removed: #a16207;
     min-height: 100%;
     color-scheme: light;
     background: var(--background);
   }
 
   html.dark {
+    --change-drop: #4ade80;
+    --change-increase: #f87171;
+    --change-removed: #facc15;
     color-scheme: dark;
   }
 

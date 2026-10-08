@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
-import { createHmac, randomUUID } from 'node:crypto'
+import { createHash, createHmac, randomUUID } from 'node:crypto'
+import sharp from 'sharp'
 import { chromium } from 'playwright-core'
 import pg from 'pg'
 import assert from 'node:assert/strict'
@@ -16,6 +17,7 @@ const errors=[]
 const productIds=[]
 const listingIds=[]
 const fixtureRunIds=[randomUUID(),randomUUID()]
+const imageBlobId=randomUUID()
 try {
   await db.query('INSERT INTO "user" (id,name,email,created_at,updated_at) VALUES ($1,$2,$3,now(),now())',[userId,'UI verification',`${userId}@example.test`])
   await db.query('INSERT INTO session (id,user_id,token,expires_at,created_at,updated_at) VALUES ($1,$2,$3,now()+interval \'1 hour\',now(),now())',[randomUUID(),userId,token])
@@ -29,6 +31,9 @@ try {
     await db.query('INSERT INTO source_listings (id,source_id,product_id,variant_id,listing_key,url) VALUES ($1,$2,$3,$4,$5,$6)',[listingId,sourceId,productId,variantId,`panel-listing-${suffix}-${index}`,`${origin}/products/fixture-${index}`])
     await db.query('INSERT INTO source_listing_current (listing_id,title,price,compare_at_price,currency,available,first_seen_at,last_seen_at,observed_at) VALUES ($1,$2,$3,$4,$5,true,now(),now(),now())',[listingId,title,[45,120,85][index],[90,240,160][index],'USD'])
   }
+  const image=await sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#dbeafe"/><rect x="15" y="12" width="34" height="40" rx="4" fill="#2563eb"/><text x="18" y="36" font-size="10" fill="white">${suffix.slice(0,4)}</text></svg>`)).png().toBuffer()
+  await db.query('INSERT INTO media_blobs (id,sha256,content_type,width,height,byte_length,data) VALUES ($1,$2,$3,64,64,$4,$5)',[imageBlobId,createHash('sha256').update(image).digest('hex'),'image/png',image.length,image])
+  await db.query('INSERT INTO listing_media (id,listing_id,source_url,source_sha256,source_content_type,original_width,original_height,thumbnail_blob_id,preview_blob_id,captured_at) VALUES ($1,$2,$3,$4,$5,64,64,$6,$6,now())',[randomUUID(),listingIds[0],`${origin}/fixture.png`,createHash('sha256').update(image).digest('hex'),'image/png',imageBlobId])
   for(const [index,runId] of fixtureRunIds.entries()){
     const at=new Date(Date.now()-(2-index)*86400000).toISOString(),evidenceId=randomUUID()
     await db.query("INSERT INTO collection_runs (id,source_id,status,created_at,started_at,observed_at,completed_at) VALUES ($1,$2,'succeeded',$3,$3,$3,$3)",[runId,sourceId,at])
@@ -61,11 +66,21 @@ try {
   await expect(page.getByRole('table').getByRole('row')).toHaveCount(2)
   await expect(page.getByRole('table')).toContainText('Down $5.00 USD')
   await expect(page.getByRole('table')).toContainText('11.11% lower')
+  await expect(page.getByRole('columnheader',{name:'Photo',exact:true})).toBeVisible()
+  await expect(page.getByRole('columnheader',{name:'Changes',exact:true})).toHaveCount(0)
+  const thumbnail=page.getByRole('table').locator('img')
+  await expect(thumbnail).toHaveCount(1)
+  await expect(thumbnail).toHaveAttribute('src',/^\/api\/media\/.+\/thumbnail$/)
+  await expect(thumbnail).toHaveJSProperty('naturalWidth',64)
+  await expect(page.getByRole('table').locator('.text-change-drop')).not.toHaveCount(0)
+  await expect(page.getByRole('table').locator('.text-change-drop').first()).toHaveCSS('color','rgb(21, 128, 61)')
   await expect(page.getByRole('table')).toContainText('USD')
   await expect(page.getByRole('table')).not.toContainText('unknown currency')
   await page.getByRole('button',{name:'Compare runs',exact:true}).click()
   await page.getByRole('button',{name:'Missing listings: 1',exact:true}).click()
   await expect(page.getByRole('table')).toContainText('Panel mount circuit breaker')
+  await expect(page.getByRole('table').locator('.text-change-removed')).not.toHaveCount(0)
+  await expect(page.getByRole('table').locator('.text-change-removed').first()).toHaveCSS('color','rgb(161, 98, 7)')
   await expect(page.getByRole('table').getByRole('row')).toHaveCount(2)
   await page.reload({waitUntil:'networkidle'})
   await expect(page.getByRole('table')).toContainText('Panel mount circuit breaker')
@@ -81,6 +96,19 @@ try {
   await expect(page.getByRole('table')).toContainText('Last known value')
   await expect(page.getByRole('table')).toContainText('$40.00 USD')
   await expect(page.getByRole('table')).toContainText('Price unchanged')
+  const riseRun=randomUUID(),riseEvidence=randomUUID(),riseAt=new Date().toISOString()
+  await db.query("INSERT INTO collection_runs (id,source_id,status,created_at,started_at,observed_at,completed_at) VALUES ($1,$2,'partial',$3,$3,$3,$3)",[riseRun,sourceId,riseAt])
+  await db.query('INSERT INTO source_evidence (id,source_id,run_id,captured_at,payload) VALUES ($1,$2,$3,$4,$5)',[riseEvidence,sourceId,riseRun,riseAt,'{}'])
+  await db.query('INSERT INTO source_listing_observations (listing_id,title,price,currency,available,observed_at,evidence_id) VALUES ($1,$2,50,NULL,false,$3,$4)',[listingIds[0],'Industrial contactor assembly',riseAt,riseEvidence])
+  await page.goto('http://127.0.0.1:3397/changes?mode=runs&kind=price_increase',{waitUntil:'networkidle'})
+  await expect(page.getByRole('table')).toContainText('Up $10.00 USD')
+  await expect(page.getByRole('table').locator('.text-change-increase')).not.toHaveCount(0)
+  await expect(page.getByRole('table').locator('.text-change-increase').first()).toHaveCSS('color','rgb(185, 28, 28)')
+  await page.getByRole('button',{name:'Switch to dark mode',exact:true}).click()
+  await expect(page.getByRole('table').locator('.text-change-increase').first()).toHaveCSS('color','rgb(248, 113, 113)')
+  await page.waitForFunction(()=>document.getAnimations().length===0)
+  await page.screenshot({path:`/tmp/hoardcore-panel-${label}/changes-highlight-dark.png`,fullPage:true})
+  await page.getByRole('button',{name:'Switch to light mode',exact:true}).click()
   await page.goto('http://127.0.0.1:3397/sources',{waitUntil:'networkidle'})
   await expect(page.getByText(/Network routing & request headers/)).toHaveCount(0)
   await page.getByRole('link',{name:'Configure source',exact:true}).click()
@@ -154,6 +182,7 @@ try {
   await browser?.close()
   if(app){app.kill('SIGTERM');await Promise.race([new Promise(resolve=>app.once('exit',resolve)),new Promise(resolve=>setTimeout(resolve,3000))]);if(app.exitCode===null)app.kill('SIGKILL')}
   await db.query('DELETE FROM catalog_sources WHERE id=$1',[sourceId])
+  await db.query('DELETE FROM media_blobs WHERE id=$1',[imageBlobId])
   for(const productId of productIds)await db.query('DELETE FROM catalog_products WHERE id=$1',[productId])
   await db.query('DELETE FROM source_origin_safety WHERE origin=$1',[origin])
   await db.query('DELETE FROM "user" WHERE id=$1',[userId])

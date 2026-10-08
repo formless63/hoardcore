@@ -1,6 +1,7 @@
 import { sql, type SQL } from 'drizzle-orm'
 import type { Database } from '~/server/db/index.server'
 import { changesSearchSchema, type ChangesSearch } from './changes.schemas'
+import { getListingMediaCaptures } from '~/features/media/media.server'
 
 type Run = { id: string; sourceId: string; status: string; at: string; completedAt: string }
 type Change = { listingId: string; title: string; sku: string | null; sourceName: string; sourceId: string; beforeRunId: string | null; afterRunId: string; at: string; kinds: string[]; beforePrice: string | null; afterPrice: string | null; beforeCurrency: string | null; afterCurrency: string | null; beforeAvailable: boolean | null; afterAvailable: boolean | null; beforeQuantity: number | null; afterQuantity: number | null; delta: string | null; percent: string | null; beforePresent: boolean | null; afterPresent: boolean | null; beforeCarried: boolean; afterCarried: boolean; beforeQuantityCarried: boolean; afterQuantityCarried: boolean; beforeValueRunId: string | null; afterValueRunId: string | null; beforePriceAt: string | null; afterPriceAt: string | null }
@@ -117,6 +118,8 @@ export async function readChanges(db: Database, input: ChangesSearch) {
     const page = Math.min(search.page, Math.max(0, Math.ceil(total / search.pageSize) - 1))
     const order = search.sort === 'drop' ? sql`delta asc nulls last` : search.sort === 'increase' ? sql`delta desc nulls last` : search.sort === 'percent' ? sql`abs(percent) desc nulls last` : sql`at::timestamptz desc`
     const rows = (await tx.execute<Change>(sql`${cte} select * from filtered order by ${order},"sourceId","listingId","afterRunId" limit ${search.pageSize} offset ${page * search.pageSize}`)).rows
-    return { ...metadata, rows, total, counts: summary.counts, page, message: null }
+    // Representative cached media is current, not a reconstruction of old images.
+    const captures = await getListingMediaCaptures(db, rows.map(row => row.listingId))
+    return { ...metadata, rows: rows.map(row => ({ ...row, mediaCaptureId: captures.get(row.listingId)?.id ?? null })), total, counts: summary.counts, page, message: null }
   }, { isolationLevel: 'repeatable read', accessMode: 'read only' })
 }
