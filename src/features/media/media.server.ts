@@ -108,7 +108,7 @@ export async function getListingMediaCapture(db: Database, listingId: string) {
 }
 
 /** One batched lookup for dense catalog tables; never fetch source URLs. */
-export async function getListingMediaCaptures(db: Database, listingIds: readonly string[]) {
+export async function getListingMediaCaptures(db: Pick<Database, 'select'>, listingIds: readonly string[]) {
   if (!listingIds.length) return new Map<string, { id: string; sourceUrl: string; capturedAt: Date }>()
   const rows = await db.select({
     listingId: listingMedia.listingId,

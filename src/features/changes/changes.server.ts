@@ -119,7 +119,7 @@ export async function readChanges(db: Database, input: ChangesSearch) {
     const order = search.sort === 'drop' ? sql`delta asc nulls last` : search.sort === 'increase' ? sql`delta desc nulls last` : search.sort === 'percent' ? sql`abs(percent) desc nulls last` : sql`at::timestamptz desc`
     const rows = (await tx.execute<Change>(sql`${cte} select * from filtered order by ${order},"sourceId","listingId","afterRunId" limit ${search.pageSize} offset ${page * search.pageSize}`)).rows
     // Representative cached media is current, not a reconstruction of old images.
-    const captures = await getListingMediaCaptures(db, rows.map(row => row.listingId))
+    const captures = await getListingMediaCaptures(tx, rows.map(row => row.listingId))
     return { ...metadata, rows: rows.map(row => ({ ...row, mediaCaptureId: captures.get(row.listingId)?.id ?? null })), total, counts: summary.counts, page, message: null }
   }, { isolationLevel: 'repeatable read', accessMode: 'read only' })
 }
