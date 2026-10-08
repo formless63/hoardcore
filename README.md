@@ -112,6 +112,12 @@ observation timestamps for reconstruction.
 Changes assumes USD when a stored currency is absent, including historical price
 drop/increase classifications and deltas; explicitly reported currencies are retained.
 This reporting assumption does not rewrite original observations or raw evidence.
+Fetched snapshots retain observations even when the price is unchanged. Changes
+reconstructs partial/304 snapshots and fills missing price/quantity fields from earlier
+known values, labeling inherited values and retaining original price evidence links and
+timestamps. Last-known quantities are not presented as newly measured stock. First
+appearances, removals, returns, unchanged prices, and actual price movements have distinct
+explanations. Older runs without an observation timestamp use their evidence capture time.
 
 Source HTTP routing and catalog headers can be configured in Settings → Sources & crawling → Network routing & request headers. Each source
 can use direct connections or an authenticated HTTP CONNECT proxy with an

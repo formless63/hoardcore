@@ -58,6 +58,18 @@ describeWithDatabase('catalog snapshot persistence and listing history', () => {
     expect(products[0]!.imageUrls).toEqual(first.product.imageUrls)
   })
 
+  it('records unchanged prices in each fetched run instead of only recording differences', async () => {
+    const item=record('unchanged',42)
+    const firstAt=new Date('2026-09-16T05:00:00Z'), secondAt=new Date('2026-09-17T05:00:00Z')
+    await persistCatalogSnapshot(db(),sourceId!,[item],{runId,observedAt:firstAt,evidence:{payload:{fixture:'unchanged-first'}}})
+    const [second]=await db().insert(collectionRuns).values({sourceId:sourceId!,status:'succeeded',observedAt:secondAt}).returning()
+    const persisted=await persistCatalogSnapshot(db(),sourceId!,[item],{runId:second.id,observedAt:secondAt,evidence:{payload:{fixture:'unchanged-second'}}})
+    const observations=await db().select().from(sourceListingObservations).where(eq(sourceListingObservations.listingId,persisted[0].listingId))
+    expect(observations).toHaveLength(2)
+    expect(observations.map(row=>row.price)).toEqual(['42.00','42.00'])
+    expect(new Set(observations.map(row=>row.evidenceId)).size).toBe(2)
+  })
+
   it('returns listing detail with newest observation first and run-level evidence', async () => {
     const item = record('detail', 31)
     item.listing.current.compareAtPrice = 44

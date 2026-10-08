@@ -7,6 +7,7 @@ import { getChanges } from '~/features/changes/changes.functions'
 import { changesQueryOptions } from '~/features/changes/changes.queries'
 import { changesSearchSchema, changeKinds, changeLabels, type ChangesSearch } from '~/features/changes/changes.schemas'
 import { Button } from '~/components/ui/button'
+import { formatChangePrice, priceMovement } from '~/features/changes/change-presentation'
 
 export const Route = createFileRoute('/changes')({
   validateSearch: changesSearchSchema,
@@ -26,13 +27,24 @@ function ChangesError({ error }: ErrorComponentProps) {
 
 const features = tableFeatures({})
 const helper = createColumnHelper<typeof features, Awaited<ReturnType<typeof getChanges>>['rows'][number]>()
-function money(price: string | null, currency: string | null, present: boolean | null) { return present ? price === null ? 'Unknown' : `${price} ${currency ?? 'USD'}` : present === null ? 'Not yet observed' : 'Missing' }
+type ChangeRow = Awaited<ReturnType<typeof getChanges>>['rows'][number]
+function SnapshotValue({ row, side }: { row: ChangeRow; side: 'before'|'after' }) {
+  const present = row[`${side}Present`]
+  if (present === null) return <div><p>No earlier history</p><p className="text-muted-foreground">First captured in this comparison</p></div>
+  const price = row[`${side}Price`], currency = row[`${side}Currency`], at = row[`${side}PriceAt`], runId = row[`${side}ValueRunId`]
+  return <div className="space-y-1">
+    <p className="font-medium">{present ? formatChangePrice(price,currency) : 'Absent from source'}</p>
+    {!present && price !== null ? <p className="text-muted-foreground">Last known: {formatChangePrice(price,currency)}</p> : null}
+    <p className="text-muted-foreground">{row[`${side}Carried`] || !present ? 'Last known value' : 'Recorded in this run'}{at ? ` · ${new Date(at).toISOString().replace('T',' ').slice(0,16)} UTC` : ''}{runId ? <> · <Link to="/runs/$runId" params={{ runId }} className="text-primary underline">Evidence</Link></> : null}</p>
+    {present ? <p className="text-muted-foreground">{row[`${side}Available`] ? 'In stock' : 'Out of stock'} · {row[`${side}Quantity`] === null ? 'Quantity not captured' : `Qty ${row[`${side}Quantity`]}${row[`${side}QuantityCarried`] ? ' (last known; not measured in this run)' : ''}`}</p> : null}
+  </div>
+}
 const columns = helper.columns([
   helper.accessor('title', { header: 'Listing', cell: info => <div className="max-w-80 whitespace-normal"><Link to="/listings/$listingId" params={{ listingId: info.row.original.listingId }} className="font-medium text-primary hover:underline">{info.getValue()}</Link><p className="mt-1 text-muted-foreground">{info.row.original.sourceName}{info.row.original.sku ? ` · ${info.row.original.sku}` : ''}</p></div> }),
   helper.accessor('kinds', { header: 'Changes', cell: info => <div className="flex max-w-60 flex-wrap gap-1">{info.getValue().filter(kind => kind !== 'price_changed' || !info.getValue().some(value => value === 'price_drop' || value === 'price_increase')).map(kind => <span key={kind} className="rounded border border-border bg-muted px-1.5 py-0.5">{changeLabels[kind as keyof typeof changeLabels] ?? kind}</span>)}</div> }),
-  helper.display({ id: 'before', header: 'Before', cell: ({ row: { original: r } }) => <><p>{money(r.beforePrice,r.beforeCurrency,r.beforePresent)}</p>{r.beforePresent ? <p className="text-muted-foreground">{r.beforeAvailable ? 'In stock' : 'Out of stock'} · Qty {r.beforeQuantity ?? '?'}</p> : null}</> }),
-  helper.display({ id: 'after', header: 'After', cell: ({ row: { original: r } }) => <><p>{money(r.afterPrice,r.afterCurrency,r.afterPresent)}</p>{r.afterPresent ? <p className="text-muted-foreground">{r.afterAvailable ? 'In stock' : 'Out of stock'} · Qty {r.afterQuantity ?? '?'}</p> : null}</> }),
-  helper.display({ id: 'delta', header: 'Price movement', cell: ({ row: { original: r } }) => r.delta === null ? '—' : <><p className={Number(r.delta) < 0 ? 'text-primary' : 'text-foreground'}>{Number(r.delta)>0 ? '+' : ''}{Number(r.delta).toFixed(2)} {r.afterCurrency}</p><p className="text-muted-foreground">{r.percent === null ? 'No percentage baseline' : `${Number(r.percent)>0 ? '+' : ''}${Number(r.percent).toFixed(2)}%`}</p></> }),
+  helper.display({ id: 'before', header: 'Earlier snapshot', cell: ({ row }) => <SnapshotValue row={row.original} side="before" /> }),
+  helper.display({ id: 'after', header: 'Later snapshot', cell: ({ row }) => <SnapshotValue row={row.original} side="after" /> }),
+  helper.display({ id: 'delta', header: 'Price movement', cell: ({ row: { original: r } }) => { const movement=priceMovement(r); return <><p className={r.delta !== null && Number(r.delta)<0 ? 'font-medium text-primary' : 'font-medium'}>{movement.label}</p><p className="text-muted-foreground">{movement.detail}</p></> } }),
   helper.display({ id: 'runs', header: 'Run evidence', cell: ({ row: { original: r } }) => <div className="space-y-1"><time dateTime={new Date(r.at).toISOString()}>{new Date(r.at).toISOString().replace('T',' ').slice(0,19)} UTC</time><p>{r.beforeRunId ? <><Link to="/runs/$runId" params={{ runId: r.beforeRunId }} className="text-primary underline">Before</Link> → </> : null}<Link to="/runs/$runId" params={{ runId: r.afterRunId }} className="text-primary underline">After</Link></p></div> }),
 ])
 const fieldClass = 'mt-1 h-9 w-full min-w-0 rounded border border-border bg-background px-2 text-xs text-foreground'
@@ -68,6 +80,7 @@ function ChangesPage() {
     <div className="flex items-center justify-between gap-2"><h1 className="text-base font-semibold">Catalog changes</h1><Button size="small" variant="secondary" disabled={isFetching} onClick={() => void client.invalidateQueries({ queryKey:['changes'] })}>{isFetching ? 'Refreshing…' : 'Refresh'}</Button></div>
     <p className="text-xs text-muted-foreground">Browse every recorded change in a date range, or compare the net state of two runs. Missing means absent from a complete collection—not merely unseen in a partial scan. No source requests are made by this view.</p>
     <div className="flex flex-wrap gap-2" aria-label="Comparison mode"><Button size="small" variant={search.mode==='recent' ? 'primary' : 'secondary'} onClick={() => update({ mode:'recent',beforeRunId:undefined,afterRunId:undefined })}>Date-range feed</Button><Button size="small" variant={search.mode==='runs' ? 'primary' : 'secondary'} onClick={() => update({ mode:'runs',sourceId: data.sourceId ?? data.sources[0]?.id,from:undefined,to:undefined })}>Compare runs</Button></div>
+    <p className="text-xs text-muted-foreground">{search.mode==='recent' ? 'Date-range feed shows each change against the preceding run, not just the net difference.' : 'Run comparison shows the net difference between the selected snapshots; intermediate changes may cancel out.'} Unchanged values are retained. Last known values fill gaps from earlier history and link to their original evidence; they are not newly measured values.</p>
     <form key={JSON.stringify(search)} onSubmit={apply} className="grid gap-3 rounded border border-border bg-card p-3 text-xs sm:grid-cols-2 xl:grid-cols-4">
       <label>Source<select name="sourceId" aria-label="Source" className={fieldClass} value={data.sourceId ?? ''} onChange={event => update({ sourceId:event.target.value || undefined,beforeRunId:undefined,afterRunId:undefined })}>{search.mode==='recent' ? <option value="">All sources</option> : null}{data.sources.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select></label>
       {search.mode==='runs' ? <>{(['before','after'] as const).map(which => <label key={which}>{which==='before' ? 'Earlier run' : 'Later run'}<select name={`${which}RunId`} defaultValue={search[`${which}RunId`] ?? ''} className={fieldClass}><option value="">{which==='before' ? 'Previous run' : 'Latest run'}</option>{data.runs.map(run => <option key={run.id} value={run.id}>{runLabel(run)}</option>)}</select></label>)}</> : <DateRange from={data.from} to={data.to} />}

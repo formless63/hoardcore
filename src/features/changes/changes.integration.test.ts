@@ -17,7 +17,7 @@ suite('catalog changes reconstruction', () => {
   beforeAll(async () => {
     const [source]=await db().insert(catalogSources).values({ moduleId:'test',displayName:'Changes fixture',sourceKey:crypto.randomUUID() }).returning();sourceId=source.id
     for(let i=0;i<5;i++){
-      const [run]=await db().insert(collectionRuns).values({ sourceId,status:i===1?'partial':i===3?'not_modified':'succeeded',createdAt:new Date(times[i]),startedAt:new Date(times[i]),observedAt:new Date(times[i]),completedAt:new Date(times[i]) }).returning();runIds.push(run.id)
+      const [run]=await db().insert(collectionRuns).values({ sourceId,status:i===1?'partial':i===3?'not_modified':'succeeded',createdAt:new Date(times[i]),startedAt:new Date(times[i]),observedAt:i===0?null:new Date(times[i]),completedAt:new Date(times[i]) }).returning();runIds.push(run.id)
     }
     for(let i=0;i<55;i++){
       const [product]=await db().insert(catalogProducts).values({ productKey:crypto.randomUUID(),title:`Changes ${i}` }).returning();productIds.push(product.id)
@@ -26,9 +26,17 @@ suite('catalog changes reconstruction', () => {
     }
     for(let i=0;i<5;i++){
       if(i===3)continue
-      const [evidence]=await db().insert(sourceEvidence).values({ sourceId,runId:runIds[i],capturedAt:new Date(times[i]),payload:{} }).returning()
+      const capturedAt=new Date(Date.parse(times[i])+(i===0?13:0))
+      const [evidence]=await db().insert(sourceEvidence).values({ sourceId,runId:runIds[i],capturedAt,payload:{} }).returning()
       const indices=i===0 ? Array.from({length:54},(_,j)=>j) : i===1 ? [0,54] : i===2 ? [0,54] : [0,1,54]
-      for(const j of indices)await db().insert(sourceListingObservations).values({ listingId:listingIds[j],title:`Changes ${j}`,price:j===0 ? (i===0?'100':i===1?'80':i===2?'90':'70') : '10',currency:j===0&&i!==1?null:j===54&&i===4?'EUR':'USD',available:!(j===0&&i===2),stockQuantity:j===0&&i===2?0:5,observedAt:new Date(times[i]),evidenceId:evidence.id })
+      for(const j of indices)await db().insert(sourceListingObservations).values({ listingId:listingIds[j],title:`Changes ${j}`,price:j===0 ? (i===0?'100':i===1?'80':i===2?'90':'70') : '10',currency:j===0&&i!==1?null:j===54&&i===4?'EUR':'USD',available:!(j===0&&i===2),stockQuantity:j===0&&i===2?0:5,observedAt:capturedAt,evidenceId:evidence.id })
+    }
+    for(let i=5;i<8;i++){
+      const at=new Date(`2026-01-${String(i+1).padStart(2,'0')}T10:00:00Z`)
+      const [run]=await db().insert(collectionRuns).values({ sourceId,status:i===6?'not_modified':'partial',observedAt:at,startedAt:at,createdAt:at,completedAt:at }).returning();runIds.push(run.id)
+      if(i===6)continue
+      const [evidence]=await db().insert(sourceEvidence).values({ sourceId,runId:run.id,capturedAt:at,payload:{} }).returning()
+      await db().insert(sourceListingObservations).values({ listingId:listingIds[0],title:'Changes 0',price:i===5?null:'60',currency:null,available:i!==5,stockQuantity:null,observedAt:at,evidenceId:evidence.id })
     }
   })
   afterAll(async()=>{
@@ -64,7 +72,23 @@ suite('catalog changes reconstruction', () => {
     expect((await compare(1,2,{kind:'price_increase'})).total).toBe(1)
     expect((await compare(3,4,{kind:'price_drop'})).total).toBe(1)
     const raw=await db().select({currency:sourceListingObservations.currency}).from(sourceListingObservations).where(eq(sourceListingObservations.listingId,listingIds[0]))
-    expect(raw.filter(row=>row.currency===null)).toHaveLength(3)
+    expect(raw.filter(row=>row.currency===null)).toHaveLength(5)
+  })
+  it('hydrates sparse values from prior evidence with explicit provenance and carries 304 snapshots',async()=>{
+    const gap=(await compare(4,5)).rows.find(row=>row.listingId===listingIds[0])!
+    expect(gap).toMatchObject({ beforePrice:'70.00',afterPrice:'70.00',afterCarried:true,afterQuantity:5,afterQuantityCarried:true,afterValueRunId:runIds[4] })
+    expect(gap.kinds).not.toContain('price_changed')
+    expect((await compare(5,6)).total).toBe(0)
+    const movement=(await compare(6,7,{kind:'price_drop'})).rows[0]
+    expect(movement).toMatchObject({ beforePrice:'70.00',afterPrice:'60.00',beforeCarried:true,beforeValueRunId:runIds[4],afterCarried:false })
+    const raw=await db().select({price:sourceListingObservations.price}).from(sourceListingObservations).where(eq(sourceListingObservations.listingId,listingIds[0]))
+    expect(raw.filter(row=>row.price===null)).toHaveLength(1)
+  })
+  it('uses evidence capture time for legacy runs and retains their original baseline',async()=>{
+    const row=(await compare(0,1)).rows.find(row=>row.listingId===listingIds[0])!
+    expect(row.beforePresent).toBe(true)
+    expect(row.beforeCarried).toBe(false)
+    expect(new Date(row.beforePriceAt!).toISOString()).toBe('2026-01-01T10:00:00.013Z')
   })
   it('reconstructs old presence independently of later reappearances and handles currency changes',async()=>{
     expect((await compare(3,4)).rows.find(row=>row.listingId===listingIds[1])?.kinds).toContain('reappeared')
