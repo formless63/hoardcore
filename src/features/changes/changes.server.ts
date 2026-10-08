@@ -38,7 +38,9 @@ export async function readChanges(db: Database, input: ChangesSearch) {
     const cte = sql`with pairs as (${pairs}), snapshots as (
       select l.id "listingId", l.source_id "sourceId", s.display_name "sourceName", v.sku,
         coalesce(a.title,b.title) title,p.before_id "beforeRunId",p.after_id "afterRunId",p.after_at::text at,
-        b.price "beforePrice",a.price "afterPrice",b.currency "beforeCurrency",a.currency "afterCurrency",
+        b.price "beforePrice",a.price "afterPrice",
+        coalesce(nullif(trim(b.currency),''),'USD') "beforeCurrency",
+        coalesce(nullif(trim(a.currency),''),'USD') "afterCurrency",
         b.available "beforeAvailable",a.available "afterAvailable",b.stock_quantity "beforeQuantity",a.stock_quantity "afterQuantity",
         case when b.id is null then null else b.at >= bc.at or bc.at is null end "beforePresent",
         case when a.id is null then null else a.at >= ac.at or ac.at is null end "afterPresent"

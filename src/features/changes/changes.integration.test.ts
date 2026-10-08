@@ -28,7 +28,7 @@ suite('catalog changes reconstruction', () => {
       if(i===3)continue
       const [evidence]=await db().insert(sourceEvidence).values({ sourceId,runId:runIds[i],capturedAt:new Date(times[i]),payload:{} }).returning()
       const indices=i===0 ? Array.from({length:54},(_,j)=>j) : i===1 ? [0,54] : i===2 ? [0,54] : [0,1,54]
-      for(const j of indices)await db().insert(sourceListingObservations).values({ listingId:listingIds[j],title:`Changes ${j}`,price:j===0 ? (i===0?'100':i===1?'80':i===2?'90':'70') : '10',currency:j===54&&i===4?'EUR':'USD',available:!(j===0&&i===2),stockQuantity:j===0&&i===2?0:5,observedAt:new Date(times[i]),evidenceId:evidence.id })
+      for(const j of indices)await db().insert(sourceListingObservations).values({ listingId:listingIds[j],title:`Changes ${j}`,price:j===0 ? (i===0?'100':i===1?'80':i===2?'90':'70') : '10',currency:j===0&&i!==1?null:j===54&&i===4?'EUR':'USD',available:!(j===0&&i===2),stockQuantity:j===0&&i===2?0:5,observedAt:new Date(times[i]),evidenceId:evidence.id })
     }
   })
   afterAll(async()=>{
@@ -55,6 +55,16 @@ suite('catalog changes reconstruction', () => {
   })
   it('does not invent removals or observations on a not-modified result',async()=>{
     expect((await compare(2,3)).total).toBe(0)
+  })
+  it('assumes USD for absent currency without suppressing price filters or rewriting evidence',async()=>{
+    const drop=await compare(0,1,{kind:'price_drop'})
+    expect(drop.total).toBe(1)
+    expect(drop.rows[0]).toMatchObject({ beforeCurrency:'USD',afterCurrency:'USD',delta:'-20.00' })
+    expect(drop.rows[0].kinds).not.toContain('currency_changed')
+    expect((await compare(1,2,{kind:'price_increase'})).total).toBe(1)
+    expect((await compare(3,4,{kind:'price_drop'})).total).toBe(1)
+    const raw=await db().select({currency:sourceListingObservations.currency}).from(sourceListingObservations).where(eq(sourceListingObservations.listingId,listingIds[0]))
+    expect(raw.filter(row=>row.currency===null)).toHaveLength(3)
   })
   it('reconstructs old presence independently of later reappearances and handles currency changes',async()=>{
     expect((await compare(3,4)).rows.find(row=>row.listingId===listingIds[1])?.kinds).toContain('reappeared')

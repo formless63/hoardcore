@@ -109,6 +109,9 @@ Complete successful runs establish absence; partial and not-modified runs carry
 forward unobserved state. Dashboard links open the full feed rather than only its
 largest movers. Historical observations without linked run evidence use their
 observation timestamps for reconstruction.
+Changes assumes USD when a stored currency is absent, including historical price
+drop/increase classifications and deltas; explicitly reported currencies are retained.
+This reporting assumption does not rewrite original observations or raw evidence.
 
 Source HTTP routing and catalog headers can be configured in Settings → Sources & crawling → Network routing & request headers. Each source
 can use direct connections or an authenticated HTTP CONNECT proxy with an

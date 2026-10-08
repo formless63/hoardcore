@@ -33,7 +33,7 @@ try {
     const at=new Date(Date.now()-(2-index)*86400000).toISOString(),evidenceId=randomUUID()
     await db.query("INSERT INTO collection_runs (id,source_id,status,created_at,started_at,observed_at,completed_at) VALUES ($1,$2,'succeeded',$3,$3,$3,$3)",[runId,sourceId,at])
     await db.query('INSERT INTO source_evidence (id,source_id,run_id,captured_at,payload) VALUES ($1,$2,$3,$4,$5)',[evidenceId,sourceId,runId,at,'{}'])
-    for(const item of index===0?[0,1]:[0,2])await db.query('INSERT INTO source_listing_observations (listing_id,title,price,currency,available,observed_at,evidence_id) VALUES ($1,$2,$3,$4,true,$5,$6)',[listingIds[item],['Industrial contactor assembly','Panel mount circuit breaker','Compact motor controller'][item],item===0?(index===0?'45':'40'):item===1?'120':'85','USD',at,evidenceId])
+    for(const item of index===0?[0,1]:[0,2])await db.query('INSERT INTO source_listing_observations (listing_id,title,price,currency,available,observed_at,evidence_id) VALUES ($1,$2,$3,$4,true,$5,$6)',[listingIds[item],['Industrial contactor assembly','Panel mount circuit breaker','Compact motor controller'][item],item===0?(index===0?'45':'40'):item===1?'120':'85',item===0?null:'USD',at,evidenceId])
   }
 
   app=spawn('node',['.output/server/index.mjs'],{cwd:root,env:{...process.env,PORT:'3397',HOST:'127.0.0.1',DATABASE_URL:url.href,BETTER_AUTH_SECRET:secret,BETTER_AUTH_URL:'http://127.0.0.1:3397',CATALOG_COLLECTION_ENABLED:'false',MEDIA_CAPTURE_ENABLED:'false'},stdio:['ignore','pipe','pipe']})
@@ -60,6 +60,8 @@ try {
   await expect(page.getByRole('heading',{name:'Catalog changes',exact:true})).toBeVisible()
   await expect(page.getByRole('table').getByRole('row')).toHaveCount(2)
   await expect(page.getByRole('table')).toContainText('-5.00')
+  await expect(page.getByRole('table')).toContainText('USD')
+  await expect(page.getByRole('table')).not.toContainText('unknown currency')
   await page.getByRole('button',{name:'Compare runs',exact:true}).click()
   await page.getByRole('button',{name:'Missing listings: 1',exact:true}).click()
   await expect(page.getByRole('table')).toContainText('Panel mount circuit breaker')
