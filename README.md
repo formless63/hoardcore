@@ -102,6 +102,14 @@ notifications, catalog organization, research API tokens, and Loxep connections.
 is focused on running and monitoring collections; its Configure source links open the
 matching source under Settings → Sources & crawling.
 
+Changes provides a searchable, paginated date-range feed of price, stock, new,
+missing, and reappearing listing changes, plus net comparisons between two runs
+of the same source. Rows show before/after values, price movements and run evidence.
+Complete successful runs establish absence; partial and not-modified runs carry
+forward unobserved state. Dashboard links open the full feed rather than only its
+largest movers. Historical observations without linked run evidence use their
+observation timestamps for reconstruction.
+
 Source HTTP routing and catalog headers can be configured in Settings → Sources & crawling → Network routing & request headers. Each source
 can use direct connections or an authenticated HTTP CONNECT proxy with an
 encrypted password. Proxy failures do not fall back to direct connections;

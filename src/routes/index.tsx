@@ -47,6 +47,9 @@ function Overview() {
       </div>
     </div>
 
+    <nav aria-label="Browse all changes" className="flex flex-wrap gap-x-4 gap-y-2 text-xs">
+      {(['all','price_drop','price_changed','new','missing','stock_changed'] as const).map(kind => <Link key={kind} to="/changes" search={{ mode:'recent', days, kind, query:'', sort:'recent', page:0, pageSize:50 }} className="text-primary underline">{({ all:'View all changes', price_drop:'All price drops', price_changed:'All price changes', new:'All new listings', missing:'All missing listings', stock_changed:'All stock changes' })[kind]}</Link>)}
+    </nav>
     <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5" aria-label="Inventory totals">
       <Stat label="Tracked listings" value={data.totals.tracked} detail={`Across ${data.sources.length} sources`} />
       <Stat label="In stock" value={data.totals.inStock} detail={percent(data.totals.inStock, data.totals.tracked) + ' of tracked'} tone="positive" />

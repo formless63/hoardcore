@@ -14,6 +14,8 @@ const origin=`https://ui-check-${suffix}.example.test`
 let app,browser
 const errors=[]
 const productIds=[]
+const listingIds=[]
+const fixtureRunIds=[randomUUID(),randomUUID()]
 try {
   await db.query('INSERT INTO "user" (id,name,email,created_at,updated_at) VALUES ($1,$2,$3,now(),now())',[userId,'UI verification',`${userId}@example.test`])
   await db.query('INSERT INTO session (id,user_id,token,expires_at,created_at,updated_at) VALUES ($1,$2,$3,now()+interval \'1 hour\',now(),now())',[randomUUID(),userId,token])
@@ -21,11 +23,17 @@ try {
   await db.query('INSERT INTO source_origin_safety (origin,blocked_until,paused,throttle_strikes) VALUES ($1,NULL,false,0)',[origin])
 
   for(const [index,title] of ['Industrial contactor assembly','Panel mount circuit breaker','Compact motor controller'].entries()){
-    const productId=randomUUID(),variantId=randomUUID(),listingId=randomUUID();productIds.push(productId)
+    const productId=randomUUID(),variantId=randomUUID(),listingId=randomUUID();productIds.push(productId);listingIds.push(listingId)
     await db.query('INSERT INTO catalog_products (id,product_key,title,brand,product_type) VALUES ($1,$2,$3,$4,$5)',[productId,`panel-product-${suffix}-${index}`,title,'Fixture Industries','Electrical components'])
     await db.query('INSERT INTO catalog_variants (id,product_id,variant_key,sku) VALUES ($1,$2,$3,$4)',[variantId,productId,`panel-variant-${suffix}-${index}`,`DEMO-${index+1}`])
     await db.query('INSERT INTO source_listings (id,source_id,product_id,variant_id,listing_key,url) VALUES ($1,$2,$3,$4,$5,$6)',[listingId,sourceId,productId,variantId,`panel-listing-${suffix}-${index}`,`${origin}/products/fixture-${index}`])
     await db.query('INSERT INTO source_listing_current (listing_id,title,price,compare_at_price,currency,available,first_seen_at,last_seen_at,observed_at) VALUES ($1,$2,$3,$4,$5,true,now(),now(),now())',[listingId,title,[45,120,85][index],[90,240,160][index],'USD'])
+  }
+  for(const [index,runId] of fixtureRunIds.entries()){
+    const at=new Date(Date.now()-(2-index)*86400000).toISOString(),evidenceId=randomUUID()
+    await db.query("INSERT INTO collection_runs (id,source_id,status,created_at,started_at,observed_at,completed_at) VALUES ($1,$2,'succeeded',$3,$3,$3,$3)",[runId,sourceId,at])
+    await db.query('INSERT INTO source_evidence (id,source_id,run_id,captured_at,payload) VALUES ($1,$2,$3,$4,$5)',[evidenceId,sourceId,runId,at,'{}'])
+    for(const item of index===0?[0,1]:[0,2])await db.query('INSERT INTO source_listing_observations (listing_id,title,price,currency,available,observed_at,evidence_id) VALUES ($1,$2,$3,$4,true,$5,$6)',[listingIds[item],['Industrial contactor assembly','Panel mount circuit breaker','Compact motor controller'][item],item===0?(index===0?'45':'40'):item===1?'120':'85','USD',at,evidenceId])
   }
 
   app=spawn('node',['.output/server/index.mjs'],{cwd:root,env:{...process.env,PORT:'3397',HOST:'127.0.0.1',DATABASE_URL:url.href,BETTER_AUTH_SECRET:secret,BETTER_AUTH_URL:'http://127.0.0.1:3397',CATALOG_COLLECTION_ENABLED:'false',MEDIA_CAPTURE_ENABLED:'false'},stdio:['ignore','pipe','pipe']})
@@ -47,6 +55,19 @@ try {
   const {mkdir}=await import('node:fs/promises')
   await mkdir(`/tmp/hoardcore-panel-${label}`,{recursive:true})
   const results=[]
+  await page.goto('http://127.0.0.1:3397/',{waitUntil:'networkidle'})
+  await page.getByRole('link',{name:'All price drops',exact:true}).click()
+  await expect(page.getByRole('heading',{name:'Catalog changes',exact:true})).toBeVisible()
+  await expect(page.getByRole('table').getByRole('row')).toHaveCount(2)
+  await expect(page.getByRole('table')).toContainText('-5.00')
+  await page.getByRole('button',{name:'Compare runs',exact:true}).click()
+  await page.getByRole('button',{name:'Missing listings: 1',exact:true}).click()
+  await expect(page.getByRole('table')).toContainText('Panel mount circuit breaker')
+  await expect(page.getByRole('table').getByRole('row')).toHaveCount(2)
+  await page.reload({waitUntil:'networkidle'})
+  await expect(page.getByRole('table')).toContainText('Panel mount circuit breaker')
+  await page.getByRole('button',{name:'New listings: 1',exact:true}).click()
+  await expect(page.getByRole('table')).toContainText('Compact motor controller')
   await page.goto('http://127.0.0.1:3397/sources',{waitUntil:'networkidle'})
   await expect(page.getByText(/Network routing & request headers/)).toHaveCount(0)
   await page.getByRole('link',{name:'Configure source',exact:true}).click()
@@ -71,7 +92,7 @@ try {
   await safetySave.click()
   await expect(page.getByText('Safety settings saved',{exact:true})).toBeVisible()
   assert.equal(await safetySave.getAttribute('data-fixture-identity'),'retained','Response editor must not remount after save')
-  for(const [route,name] of [['/','overview'],['/listings','listings'],['/sources','sources'],['/settings','settings'],['/settings/sources','source-settings'],['/settings/alerts','notifications'],['/settings/category-groups','categories'],['/settings/research-tokens','research-api'],['/settings/loxep','loxep'],['/research/manual','research'],['/opportunities','opportunities'],['/watchlist','watchlist']]){
+  for(const [route,name] of [['/','overview'],['/changes','changes'],['/listings','listings'],['/sources','sources'],['/settings','settings'],['/settings/sources','source-settings'],['/settings/alerts','notifications'],['/settings/category-groups','categories'],['/settings/research-tokens','research-api'],['/settings/loxep','loxep'],['/research/manual','research'],['/opportunities','opportunities'],['/watchlist','watchlist']]){
     await page.setViewportSize({width:1440,height:1050})
     await page.goto('http://127.0.0.1:3397'+route,{waitUntil:'networkidle'})
     if(name==='research')await expect(page.getByRole('link',{name:'Research',exact:true})).toHaveAttribute('aria-current','location')
@@ -82,7 +103,7 @@ try {
     }
     await page.screenshot({path:`/tmp/hoardcore-panel-${label}/${name}-desktop.png`,fullPage:true})
     results.push({route,title:await page.title(),headings:await page.locator('h1,h2').allTextContents(),overflow:await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)})
-    if(['listings','sources','settings','source-settings','notifications','categories','research-api','loxep'].includes(name)){
+    if(['changes','listings','sources','settings','source-settings','notifications','categories','research-api','loxep'].includes(name)){
       await page.setViewportSize({width:390,height:844})
       await page.screenshot({path:`/tmp/hoardcore-panel-${label}/${name}-mobile.png`,fullPage:true})
       results.push({route,mobile:true,overflow:await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)})

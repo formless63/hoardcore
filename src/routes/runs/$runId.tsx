@@ -51,6 +51,7 @@ function CollectionRunPage() {
   return (
     <main className="w-full px-2 py-3 sm:px-3" id="main-content">
       <Link className={buttonStyles({ variant: 'ghost' })} to="/sources">← Sources</Link>
+      {['succeeded','partial','not_modified'].includes(run.status) ? <Link to="/changes" search={{ mode:'runs',sourceId:run.sourceId,afterRunId:run.id,days:7,kind:'all',query:'',sort:'recent',page:0,pageSize:50 }} className="ml-3 text-xs text-primary underline">Compare with previous run</Link> : null}
       <h1 className="mt-2 text-base font-semibold text-foreground">{sourceName}</h1>
       <div className="mt-2 flex flex-wrap items-center gap-3 rounded border border-border bg-card p-3">
         <Badge variant={run.status === 'failed' ? 'danger' : run.status === 'succeeded' ? 'success' : 'info'}>{run.status.replace('_', ' ')}</Badge>

@@ -127,6 +127,7 @@ function RootDocument({ children }: { children: ReactNode }) {
                     Watchlist
                   </Link>
                   <Link to="/opportunities" className="shrink-0 rounded-sm border border-transparent px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-border hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&[data-status=active]]:border-primary/40 [&[data-status=active]]:bg-primary/10 [&[data-status=active]]:text-foreground">Opportunities</Link>
+                  <Link to="/changes" search={{ mode: 'recent', days: 7, kind: 'all', query: '', sort: 'recent', page: 0, pageSize: 50 }} className="shrink-0 rounded-sm border border-transparent px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent [&[data-status=active]]:border-primary/40 [&[data-status=active]]:bg-primary/10 [&[data-status=active]]:text-foreground" activeOptions={{ includeSearch: false }}>Changes</Link>
                   <Link
                     to="/research/preview"
                     data-status={isResearchPage ? 'active' : undefined}
